@@ -26,19 +26,26 @@ Claude の契約や API は使いません。金融機関の ID・パスワー�
 > （公開されるのは画面のプログラムだけです。入力したデータはリポジトリにも公開サイトにも入りません）。
 > private のまま使うには GitHub Pro などの有料プランが必要です。
 
-1. このブランチの内容を `main` ブランチにする
-   - リポジトリが空の状態で最初に push されたブランチが既定のブランチになっている場合は、
-     GitHub の **Settings → General → Default branch** の鉛筆アイコンから名前を `main` に変更できます。
-   - すでに `main` がある場合は、プルリクエストで `main` に取り込みます。
-2. **Settings → General → Danger Zone → Change repository visibility** で public にする（無料で使う場合）
-3. **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする
-4. `main` に push すると `.github/workflows/pages.yml` が動き、単体テストに通ったら `app/` フォルダーだけが公開されます
-5. 公開先：`https://fubukiandkogure.github.io/money/`
+1. **Settings → General → Danger Zone → Change repository visibility** で public にする（無料で使う場合）
+2. **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする
+3. **Actions → Deploy to GitHub Pages → Run workflow** を押す（以後は既定のブランチへ push するたびに自動で動きます）
+   - 単体テストに通ったら `app/` フォルダーだけが公開されます。数分かかります
+   - 既定のブランチ（Settings → General → Default branch）から公開します。名前は `main` でなくても動きます
+4. 公開先：`https://fubukiandkogure.github.io/money/`
    （同じドメインの `/subseat/` とは保存場所もキャッシュも別なので、旧サブスク荘は壊れません）
+
+スマホのブラウザで Settings が見つからないときは、ブラウザのメニューから「PC版サイト」にすると出てきます。
+
+#### 404 になるとき
+
+- **Pages の公開先が 404**：上の 1〜3 がまだか、Actions の実行が終わっていないか失敗しています。
+  Actions の画面で「Deploy to GitHub Pages」に緑のチェックが付くまで待ってください。
+  赤い×なら、その実行を開いて「Re-run all jobs」（1〜2 を済ませる前に動いた実行は失敗しています）。
+- **リポジトリ自体（github.com/fubukiandkogure/money）が 404**：private のリポジトリは、ログインしていないブラウザからは 404 に見えます。
 
 ### 更新するとき
 
-`app/` の中を直して `main` に push するだけです。開いている画面は、次に開いたとき（オンラインなら通常すぐ）新しい版になります。
+`app/` の中を直して既定のブランチに push するだけです。開いている画面は、次に開いたとき（オンラインなら通常すぐ）新しい版になります。
 
 - 画面のファイルを増やした・名前を変えたときは `app/sw.js` の `SHELL` の一覧も直します（`npm test` が漏れを教えてくれます）。
 - 版を上げるときは `app/js/core/constants.js` の `APP_VERSION` と `app/sw.js` の `VERSION` をそろえて上げます。

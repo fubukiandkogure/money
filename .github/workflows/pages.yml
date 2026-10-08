@@ -1,11 +1,11 @@
 # ふところ町を GitHub Pages に配置する。
-# main への push で、単体テストに通ったら app/ フォルダーだけを公開する。
+# 既定のブランチ（Settings → General → Default branch。名前は main でなくてよい）への push で、
+# 単体テストに通ったら app/ フォルダーだけを公開する。ほかのブランチではテストだけ行う。
 # （テストやドキュメントは公開しない。本人の入力データはリポジトリにも公開物にも含まれない）
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
         run: npm test
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
     needs: test
     runs-on: ubuntu-latest
     permissions:
