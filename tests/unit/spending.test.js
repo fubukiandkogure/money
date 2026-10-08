@@ -97,7 +97,10 @@ test('E06: ごほうびの付け外しで変わるのは振り返り一覧だけ
   const s1 = summarizeExpenses(w.state.events, p);
   assert.equal(s1.luxury.count, 1);
   assert.equal(s1.total, s0.total);
-  assert.deepEqual(s1.byCategory.map((c) => c.total), s0.byCategory.map((c) => c.total));
+  assert.deepEqual(
+    s1.byCategory.map((c) => c.total),
+    s0.byCategory.map((c) => c.total),
+  );
   w.run(A.setLuxury(w.state, e.id, false, w.ctx()));
   const s2 = summarizeExpenses(w.state.events, p);
   assert.equal(s2.luxury.count, 0);
@@ -109,7 +112,10 @@ test('E07: 少額のごほうびは振り返れる。高額でも自動で贅沢
   w.expense(3000, 'food', { isLuxury: true });
   const big = w.expense(50_000, 'daily');
   const s = summarizeExpenses(w.state.events, monthPeriod('2026-10'));
-  assert.deepEqual(s.luxury.items.map((e) => e.amountYen), [3000]);
+  assert.deepEqual(
+    s.luxury.items.map((e) => e.amountYen),
+    [3000],
+  );
   assert.equal(s.big[0].id, big.id);
   assert.equal(s.big[0].isLuxury, false);
 });

@@ -1,6 +1,6 @@
 {
   "name": "futokoro-machi",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "ふところ町 — 自分専用の資産・奨学金・支出・サブスク管理（GitHub Pages + 端末内保存）",
   "type": "module",

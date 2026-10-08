@@ -93,9 +93,7 @@ export function projection(state, today) {
   const trials = views.filter((v) => v.status === 'trial');
   const trialAfterKnown = trials.filter((v) => afterTrialAnnual(v.current) !== null);
   // 退去予定：将来日に終了する条件があるもの。減るのは「見込み」であり、実現した節約額ではない
-  const ending = active
-    .filter((v) => v.nextEnd)
-    .map((v) => ({ contract: v.contract, on: v.nextEnd.effectiveOn, annual: v.annual }));
+  const ending = active.filter((v) => v.nextEnd).map((v) => ({ contract: v.contract, on: v.nextEnd.effectiveOn, annual: v.annual }));
   return {
     views,
     annualTotal,
@@ -196,7 +194,7 @@ export function paymentChecklist(state, ym, today) {
 }
 
 function makeRow(cand, contract, link, eventsById, today) {
-  const event = link?.moneyEventId ? eventsById.get(link.moneyEventId) ?? null : null;
+  const event = link?.moneyEventId ? (eventsById.get(link.moneyEventId) ?? null) : null;
   let state = 'pending';
   if (link?.status === 'confirmed' && event && !event.deletedAt) state = 'confirmed';
   else if (link?.status === 'skipped') state = 'skipped';
@@ -238,6 +236,6 @@ export function paymentsOfContract(state, contractId) {
   const eventsById = new Map(state.events.map((e) => [e.id, e]));
   return state.paymentLinks
     .filter((l) => l.contractId === contractId)
-    .map((l) => ({ link: l, event: l.moneyEventId ? eventsById.get(l.moneyEventId) ?? null : null }))
+    .map((l) => ({ link: l, event: l.moneyEventId ? (eventsById.get(l.moneyEventId) ?? null) : null }))
     .sort((a, b) => b.link.yearMonth.localeCompare(a.link.yearMonth) || (b.link.confirmedAt ?? '').localeCompare(a.link.confirmedAt ?? ''));
 }

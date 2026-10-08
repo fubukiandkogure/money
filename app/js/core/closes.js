@@ -221,7 +221,10 @@ export function monthReport(state, ym, today) {
 
 /** ym より前（ym を含まない）で最も新しい、有効に確定している月 */
 export function latestConfirmedBefore(state, ym, today) {
-  const months = [...new Set(state.closes.map((c) => c.yearMonth))].filter((m) => m < ym).sort().reverse();
+  const months = [...new Set(state.closes.map((c) => c.yearMonth))]
+    .filter((m) => m < ym)
+    .sort()
+    .reverse();
   for (const m of months) {
     const e = effectiveClose(state, m, today);
     if (e.status === 'confirmed') return e;
@@ -250,4 +253,3 @@ export function monthlySeries(state, fromYm, toYm, today) {
     return { ym, status: e.status, totals: e.status === 'confirmed' ? e.close.totals : null, close: e };
   });
 }
-

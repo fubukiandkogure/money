@@ -16,7 +16,13 @@ function fullWorld() {
   w.balance(nisa, '2026-08-31', 100_000);
   w.balance(loan, '2026-08-31', 300_000);
   w.confirm('2026-08');
-  w.run(A.addSnapshot(w.state, { accountId: bank.id, asOfDate: '2026-08-31', amountYen: 210_000, kind: 'actual', monthEndVerified: true, revisionOf: s.id }, w.ctx()));
+  w.run(
+    A.addSnapshot(
+      w.state,
+      { accountId: bank.id, asOfDate: '2026-08-31', amountYen: 210_000, kind: 'actual', monthEndVerified: true, revisionOf: s.id },
+      w.ctx(),
+    ),
+  );
   w.balance(bank, '2026-09-30', 250_000);
   w.balance(nisa, '2026-09-30', 104_000);
   w.balance(loan, '2026-09-30', 280_000);
@@ -29,7 +35,13 @@ function fullWorld() {
   w.event({ kind: 'transfer', amountYen: 40_000, fromAccountId: bank.id, toAccountId: nisa.id });
   w.event({ kind: 'repayment', amountYen: 20_000, toAccountId: loan.id, breakdownUnknown: true });
   w.expense(500, 'subscription', { datePrecision: 'month', yearMonth: '2026-09' });
-  const c = w.run(A.createContract(w.state, { displayName: '架空動画', status: 'active', priceYen: 980, frequency: 'monthly', nextDueOn: '2026-10-15', startOn: '2026-01-01' }, w.ctx())).record;
+  const c = w.run(
+    A.createContract(
+      w.state,
+      { displayName: '架空動画', status: 'active', priceYen: 980, frequency: 'monthly', nextDueOn: '2026-10-15', startOn: '2026-01-01' },
+      w.ctx(),
+    ),
+  ).record;
   w.run(A.changeTerms(w.state, c.id, { effectiveOn: '2026-12-01', priceYen: 1200 }, w.ctx()));
   w.run(A.confirmPayment(w.state, { contractId: c.id, ym: '2026-10', amountYen: 980, occurredOn: '2026-10-15' }, w.ctx()));
   w.run(A.createContract(w.state, { displayName: '架空体験', status: 'trial', priceYen: null, frequency: 'monthly', trialEndsOn: '2026-11-01' }, w.ctx()));

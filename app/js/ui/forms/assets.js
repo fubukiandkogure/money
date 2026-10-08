@@ -44,7 +44,10 @@ export function openAccountSheet({ account } = {}) {
       const loanBox = h(
         'div',
         { hidden: type !== 'loan' },
-        field('当初の元金（任意）', principal.el, { id: principal.id, hint: '分かる場合だけ。入力すると返済済み額と返済率を表示します。分からなければ空欄のままで大丈夫です。' }),
+        field('当初の元金（任意）', principal.el, {
+          id: principal.id,
+          hint: '分かる場合だけ。入力すると返済済み額と返済率を表示します。分からなければ空欄のままで大丈夫です。',
+        }),
       );
       const note = textInput({ value: account?.note ?? '', placeholder: '任意', maxlength: 500, label: 'メモ' });
 
@@ -127,7 +130,9 @@ export function openAccountSheet({ account } = {}) {
         field('種類', typeSel.el, { hint: hasRecords ? '残高の記録がある口座は種類を変えられません。' : undefined }),
         nameField,
         field('管理を始める日', from.el, { hint: 'この日以降の月末に、この口座の残高が必要になります。登録前の月を0円とはみなしません。' }),
-        field('この口座は', startSel.el, { hint: '「新しく開設」なら開設前を0円として前の月と比べられます。以前からある口座を途中から管理し始めた場合は、増えた分を成果と誤解しないよう前月比を保留します。' }),
+        field('この口座は', startSel.el, {
+          hint: '「新しく開設」なら開設前を0円として前の月と比べられます。以前からある口座を途中から管理し始めた場合は、増えた分を成果と誤解しないよう前月比を保留します。',
+        }),
         loanBox,
         field('メモ', note, { id: note.id }),
         endBox,
@@ -149,7 +154,14 @@ export function openSnapshotSheet({ account, correct, monthEnd, firstTime = fals
     title: correct ? '残高を訂正' : `${account.name} の残高`,
     build: (sheet) => {
       const initDate = correct?.asOfDate ?? (monthEnd ? lastDayOfMonth(monthEnd) : today);
-      const amount = amountInput({ value: correct?.amountYen ?? null, autofocus: true, allowZero: true, allowNegative: account.type === 'bank', big: true, label: loan ? '元金の残高' : '残高' });
+      const amount = amountInput({
+        value: correct?.amountYen ?? null,
+        autofocus: true,
+        allowZero: true,
+        allowNegative: account.type === 'bank',
+        big: true,
+        label: loan ? '元金の残高' : '残高',
+      });
       const amountField = field(loan ? '元金の残高' : account.type === 'investment' ? '評価額' : '残高', amount.el, {
         id: amount.id,
         hint: loan ? '利息を含まない元金の残り。返済の記録からは自動計算しません。' : '金融機関で確認した金額。0円も有効な値です。',
@@ -177,7 +189,9 @@ export function openSnapshotSheet({ account, correct, monthEnd, firstTime = fals
         const d = date.get();
         meBox.hidden = !(kind === 'actual' && isLastDayOfMonth(d));
         kindHint.textContent =
-          kind === 'estimate' ? '推計は合計や月末確定には使いません（参考表示のみ）。未来の日付も推計なら記録できます。' : '実残高は今日までの日付だけ。合計・月末確定の基準になります。';
+          kind === 'estimate'
+            ? '推計は合計や月末確定には使いません（参考表示のみ）。未来の日付も推計なら記録できます。'
+            : '実残高は今日までの日付だけ。合計・月末確定の基準になります。';
       };
       date.input.addEventListener('change', sync);
       sync();
@@ -222,7 +236,9 @@ export function openSnapshotSheet({ account, correct, monthEnd, firstTime = fals
           return;
         }
         const saved = await app.save(res, {
-          okMessage: correct ? '訂正しました（元の記録は履歴に残っています）' : `${formatDateShort(input.asOfDate)} の${kind === 'actual' ? '残高' : '推計'}を記録しました`,
+          okMessage: correct
+            ? '訂正しました（元の記録は履歴に残っています）'
+            : `${formatDateShort(input.asOfDate)} の${kind === 'actual' ? '残高' : '推計'}を記録しました`,
         });
         if (!saved.ok) {
           err.show(`${saved.message}。入力はそのまま残っています。`);
@@ -236,10 +252,16 @@ export function openSnapshotSheet({ account, correct, monthEnd, firstTime = fals
         { class: 'stack', onsubmit: save.run, novalidate: true },
         firstTime ? h('p', { class: 'note' }, `「${account.name}」を追加しました。続けて、確認した残高を記録しましょう（あとからでも大丈夫です）。`) : null,
         correct
-          ? h('p', { class: 'note' }, `元の記録：${formatDateLong(correct.asOfDate)} ${formatYen(correct.amountYen)}（${correct.kind === 'actual' ? '実残高' : '推計'}）。訂正しても元の記録は履歴に残ります。`)
+          ? h(
+              'p',
+              { class: 'note' },
+              `元の記録：${formatDateLong(correct.asOfDate)} ${formatYen(correct.amountYen)}（${correct.kind === 'actual' ? '実残高' : '推計'}）。訂正しても元の記録は履歴に残ります。`,
+            )
           : null,
         amountField,
-        field('いつ時点の残高？（基準日）', date.el, { hint: '確認した日ではなく、その金額が表す日付です。後日に確認した月末の残高は、月末日を選んでください。' }),
+        field('いつ時点の残高？（基準日）', date.el, {
+          hint: '確認した日ではなく、その金額が表す日付です。後日に確認した月末の残高は、月末日を選んでください。',
+        }),
         meBox,
         field('区分', h('div', null, kindSel.el, kindHint)),
         field('メモ', note, { id: note.id }),
@@ -273,7 +295,15 @@ export async function verifyAsMonthEnd(snap) {
   if (!ok) return;
   const res = A.addSnapshot(
     app.state,
-    { accountId: snap.accountId, amountYen: snap.amountYen, asOfDate: snap.asOfDate, kind: 'actual', monthEndVerified: true, note: snap.note, revisionOf: snap.id },
+    {
+      accountId: snap.accountId,
+      amountYen: snap.amountYen,
+      asOfDate: snap.asOfDate,
+      kind: 'actual',
+      monthEndVerified: true,
+      note: snap.note,
+      revisionOf: snap.id,
+    },
     app.ctx(),
   );
   await app.save(res, { okMessage: '月末の値として確認しました' });

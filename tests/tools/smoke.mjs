@@ -10,7 +10,13 @@ const dark = process.argv.includes('--dark');
 await mkdir(out, { recursive: true });
 const server = await startServer(8091);
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: dark ? 'dark' : 'light' });
+const ctx = await browser.newContext({
+  viewport: { width: 412, height: 915 },
+  deviceScaleFactor: 2,
+  locale: 'ja-JP',
+  timezoneId: 'Asia/Tokyo',
+  colorScheme: dark ? 'dark' : 'light',
+});
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));

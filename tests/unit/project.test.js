@@ -35,7 +35,9 @@ test('Service Worker が配信物をすべて事前キャッシュの対象に�
   const sw = await readFile(join(APP, 'sw.js'), 'utf8');
   const files = (await walk(APP))
     .map((p) => `./${relative(APP, p).split('\\').join('/')}`)
-    .filter((p) => p !== './sw.js' && !p.endsWith('icon-maskable.svg'));
+    .filter((p) => p !== './sw.js' && !p.endsWith('icon-maskable.svg'))
+    // 書体の分割ファイルは使う分だけ実行時にキャッシュする（一覧の fonts.css は事前キャッシュ）
+    .filter((p) => !(p.startsWith('./fonts/') && (p.endsWith('.woff2') || p.endsWith('OFL.txt'))));
   for (const f of files) assert.ok(sw.includes(`'${f}'`), `${f} が sw.js の SHELL にありません`);
   const listed = [...sw.matchAll(/'(\.\/[^']+)'/g)].map((m) => m[1]).filter((p) => p !== './');
   for (const f of listed) assert.ok(files.includes(f), `${f} は存在しません`);

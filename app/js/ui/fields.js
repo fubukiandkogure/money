@@ -1,7 +1,7 @@
 // 入力部品。文字入力を強制せず、タップ中心で入力できるようにする。
 
 import { h, nextUid } from './dom.js';
-import { icon } from './icons.js';
+import { icon, catIcon } from './icons.js';
 import { CATEGORIES, LUXURY_LABEL } from '../core/constants.js';
 import { parseYenInput, formatPlain } from '../core/money.js';
 import { addDays, formatDateShort, isValidDate, isValidMonth } from '../core/dates.js';
@@ -30,7 +30,15 @@ export function setFieldError(fieldEl, message) {
  * 金額入力。数字キーボード。カンマ・全角も受け付け、離れたときにカンマ区切りへ整える。
  * @returns {{el, input, read(): {ok, value?, error?}, set(v)}}
  */
-export function amountInput({ value = null, autofocus = false, allowNegative = false, allowZero = false, big = false, placeholder = '0', label = '金額' } = {}) {
+export function amountInput({
+  value = null,
+  autofocus = false,
+  allowNegative = false,
+  allowZero = false,
+  big = false,
+  placeholder = '0',
+  label = '金額',
+} = {}) {
   const id = nextUid('amt-');
   let negative = allowNegative && value !== null && value < 0;
   const input = h('input', {
@@ -63,10 +71,10 @@ export function amountInput({ value = null, autofocus = false, allowNegative = f
           onclick: () => {
             negative = !negative;
             signBtn.setAttribute('aria-pressed', String(negative));
-            signBtn.textContent = negative ? '−' : '+';
+            signBtn.textContent = negative ? '−' : '±';
           },
         },
-        negative ? '−' : '+',
+        negative ? '−' : '±',
       )
     : null;
   const el = h('div', { class: ['amount-wrap', big && 'big'] }, signBtn, h('span', { class: 'yen-mark', 'aria-hidden': 'true' }, '¥'), input);
@@ -104,7 +112,7 @@ export function categoryPicker(selected, onChange) {
           onChange?.(current);
         },
       },
-      h('span', { class: 'cat-icon', 'aria-hidden': 'true' }, c.icon),
+      h('span', { class: ['cat-tile', `cat-${c.id}`], 'aria-hidden': 'true' }, catIcon(c.id, 24)),
       h('span', { class: 'cat-label' }, c.label),
     ),
   );
@@ -257,7 +265,16 @@ export function formError() {
   return {
     el,
     show(msg, details) {
-      el.replaceChildren(h('p', null, msg), details ? h('ul', null, details.map((d) => h('li', null, d))) : null);
+      el.replaceChildren(
+        h('p', null, msg),
+        details
+          ? h(
+              'ul',
+              null,
+              details.map((d) => h('li', null, d)),
+            )
+          : null,
+      );
       el.hidden = false;
       el.scrollIntoView?.({ block: 'nearest' });
     },

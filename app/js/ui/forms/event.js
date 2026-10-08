@@ -1,5 +1,6 @@
 // 支出以外のお金の動き（入金・振替/積立・奨学金の返済・カードの引き落とし）。
 // どれも記録済み支出には入らず、確認済みの残高も自動では変えない。
+// 毎月の振替・積立・返済は「いつもの動き」から1タップで呼び出せる（中身を確かめてから記録する）。
 import { h } from '../dom.js';
 import { app } from '../../app.js';
 import { openSheet, confirmDialog } from '../overlay.js';
@@ -17,37 +18,93 @@ const KIND_HELP = {
   card_payment: 'カード利用分の後日の引き落とし。買い物はカードで使った日に支出として記録済みなので、ここでは支出に足しません。',
 };
 
-export function openEventSheet({ event, kind: initialKind = 'income' } = {}) {
+function fromMove(m) {
+  return {
+    kind: m.kind,
+    amountYen: m.amountYen,
+    fromAccountId: m.fromAccountId,
+    toAccountId: m.toAccountId,
+    memo: m.label,
+    incomeType: m.kind === 'income' ? 'salary' : null,
+  };
+}
+
+/** いつもの動きの説明（給与の口座 → 貯金の口座・¥30,000 など） */
+export function quickMoveSub(m) {
+  const name = (id) => app.state.accounts.find((a) => a.id === id)?.name ?? null;
+  const route = [name(m.fromAccountId), name(m.toAccountId)].filter(Boolean).join(' → ');
+  return [route || EVENT_KINDS[m.kind].label, m.amountYen ? formatYen(m.amountYen) : '金額はその都度'].join('・');
+}
+
+export function openEventSheet({ event, kind: initialKind = 'income', quickMove } = {}) {
   const editing = !!event;
   const today = app.today();
-  let kind = event?.kind ?? initialKind;
+  let kind = event?.kind ?? quickMove?.kind ?? initialKind;
+  let prefill = quickMove ? fromMove(quickMove) : null;
+  let activeMove = quickMove?.id ?? null;
   openSheet({
     title: editing ? `${EVENT_KINDS[kind].label}を編集` : 'お金の動きを記録',
     build: (sheet) => {
-      const body = h('div', { class: 'stack' });
-      const kindSel = editing
-        ? null
-        : segmented(
-            [
-              ['income', '入金'],
-              ['transfer', '振替・積立'],
-              ['repayment', '返済'],
-              ['card_payment', 'カード精算'],
-            ],
-            kind,
-            (k) => {
-              kind = k;
-              renderBody();
-            },
-            { label: '種類' },
-          );
-      const renderBody = () => body.replaceChildren(buildBody());
+      const root = h('div', { class: 'stack' });
+      const renderAll = () => root.replaceChildren(...buildAll());
+      const buildAll = () => {
+        const moves = editing ? [] : (app.state.settings.quickMoves ?? []);
+        const chips = moves.length
+          ? field(
+              'いつもの動き',
+              h(
+                'div',
+                { class: 'quick-moves', role: 'group', 'aria-label': 'いつもの動き' },
+                moves.map((m) =>
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      class: 'quick-move',
+                      'aria-pressed': String(activeMove === m.id),
+                      onclick: () => {
+                        kind = m.kind;
+                        prefill = fromMove(m);
+                        activeMove = m.id;
+                        renderAll();
+                        const amt = root.querySelector('.amount-input');
+                        if (amt && !amt.value) amt.focus();
+                      },
+                    },
+                    h('span', { class: 'qm-label' }, m.label),
+                    h('span', { class: 'qm-sub' }, quickMoveSub(m)),
+                  ),
+                ),
+              ),
+            )
+          : null;
+        const kindSel = editing
+          ? null
+          : segmented(
+              [
+                ['income', '入金'],
+                ['transfer', '振替・積立'],
+                ['repayment', '返済'],
+                ['card_payment', 'カード精算'],
+              ],
+              kind,
+              (k) => {
+                kind = k;
+                prefill = null;
+                activeMove = null;
+                renderAll();
+              },
+              { label: '種類' },
+            );
+        return [chips, kindSel?.el, buildBody()].filter(Boolean);
+      };
+
       const buildBody = () => {
-        const init = event ?? {};
+        const init = event ?? prefill ?? {};
         const all = sortAccounts(app.state.accounts.filter((a) => !a.archivedAt || [init.fromAccountId, init.toAccountId].includes(a.id)));
         const assetOpts = all.filter((a) => a.type !== 'loan').map((a) => [a.id, a.name]);
         const loanOpts = all.filter((a) => a.type === 'loan').map((a) => [a.id, a.name]);
-        const amount = amountInput({ value: init.amountYen ?? null, autofocus: !editing });
+        const amount = amountInput({ value: init.amountYen ?? null, autofocus: !editing && !init.amountYen });
         const amountField = field(kind === 'repayment' ? '元金の返済額（内訳不明なら返済した総額）' : '金額', amount.el, { id: amount.id });
         const date = dateInput({ value: init.occurredOn ?? today, today });
         const memo = textInput({ value: init.memo ?? '', placeholder: '任意', label: 'メモ' });
@@ -63,7 +120,8 @@ export function openEventSheet({ event, kind: initialKind = 'income' } = {}) {
           to = select(assetOpts, init.toAccountId ?? null, { emptyLabel: '指定しない', label: '入金先' });
           parts.push(field('種類', incomeType, { id: incomeType.id }), field('入金先の口座（任意）', to, { id: to.id }));
         } else if (kind === 'transfer') {
-          if (assetOpts.length < 2) parts.push(h('p', { class: 'warn-box' }, '振替には銀行・投資の口座が2つ以上必要です。先に「資産」で口座を登録してください。'));
+          if (assetOpts.length < 2)
+            parts.push(h('p', { class: 'warn-box' }, '振替には銀行・投資の口座が2つ以上必要です。先に「資産」で口座を登録してください。'));
           from = select(assetOpts, init.fromAccountId ?? null, { emptyLabel: '選んでください', label: '移動元' });
           to = select(assetOpts, init.toAccountId ?? null, { emptyLabel: '選んでください', label: '移動先' });
           parts.push(field('移動元', from, { id: from.id }), field('移動先（NISAなど）', to, { id: to.id }));
@@ -74,20 +132,40 @@ export function openEventSheet({ event, kind: initialKind = 'income' } = {}) {
           unknown = checkbox('元金と利息の内訳が分からない', init.breakdownUnknown ?? false, { hint: '分からない場合は勝手に分けません。' });
           parts.push(field('奨学金', to, { id: to.id }), field('引き落とし口座（任意）', from, { id: from.id }), unknown.el);
           if (!editing) {
-            interest = amountInput({ value: null });
+            interest = amountInput({ value: null, label: '利息' });
             parts.push(field('利息（分かる場合だけ）', interest.el, { id: interest.id, hint: '入力すると、利息だけを「その他」の支出として別に記録します。' }));
           }
         } else if (kind === 'card_payment') {
           from = select(assetOpts, init.fromAccountId ?? null, { emptyLabel: '指定しない', label: '引き落とし口座' });
           parts.push(field('引き落とし口座（任意）', from, { id: from.id }));
         }
-        parts.push(field('メモ', memo, { id: memo.id }), h('p', { class: 'field-hint' }, '記録しても、確認済みの残高は自動では変わりません。残高は「資産」で確認した値を記録してください。'), err.el);
+        parts.push(field('メモ', memo, { id: memo.id }));
+
+        // いつもの動きとして覚える（新しく記録するときだけ）
+        let remember = null;
+        let rememberLabel = null;
+        let rememberAmount = null;
+        if (!editing && !activeMove) {
+          remember = checkbox('この内容を「いつもの動き」に登録する', false, { hint: '来月から1タップで呼び出せます。' });
+          rememberLabel = textInput({ value: '', placeholder: '名前（例：貯金の口座へ）', maxlength: 30, label: 'いつもの動きの名前' });
+          rememberAmount = checkbox('金額も覚える', true);
+          const box = h('div', { class: 'stack tight', hidden: true }, rememberLabel, rememberAmount.el);
+          remember.input.addEventListener('change', () => {
+            box.hidden = !remember.get();
+            if (remember.get() && !rememberLabel.value) rememberLabel.value = memo.value || EVENT_KINDS[kind].label;
+          });
+          parts.push(h('div', { class: 'stack tight' }, remember.el, box));
+        }
+        parts.push(h('p', { class: 'field-hint' }, '記録しても、確認済みの残高は自動では変わりません。残高は「資産」で確認した値を記録してください。'), err.el);
 
         const save = saveButton(editing ? '保存する' : '記録する', async () => {
           err.clear();
           const a = amount.read();
           setFieldError(amountField, a.ok ? (a.value > 0 ? null : '1円以上で入力してください') : a.error);
-          if (!a.ok || a.value <= 0) return;
+          if (!a.ok || a.value <= 0) {
+            amount.input.focus();
+            return;
+          }
           let interestYen = null;
           if (interest && !interest.isEmpty()) {
             const r = interest.read();
@@ -109,12 +187,34 @@ export function openEventSheet({ event, kind: initialKind = 'income' } = {}) {
             breakdownUnknown: unknown?.get() ?? false,
             interestYen,
           };
-          const res = editing ? A.updateEvent(app.state, event.id, input, app.ctx()) : A.createEvent(app.state, input, app.ctx());
+          let res = editing ? A.updateEvent(app.state, event.id, input, app.ctx()) : A.createEvent(app.state, input, app.ctx());
           if (!res.ok) {
             err.show(res.message);
             return;
           }
-          const saved = await app.save(res, { okMessage: editing ? '保存しました' : `${EVENT_KINDS[kind].label} ${formatYen(a.value)} を記録しました` });
+          if (remember?.get()) {
+            const mv = A.addQuickMove(
+              app.state,
+              {
+                label: rememberLabel.value || memo.value || EVENT_KINDS[kind].label,
+                kind,
+                amountYen: rememberAmount.get() ? a.value : null,
+                fromAccountId: input.fromAccountId,
+                toAccountId: input.toAccountId,
+              },
+              app.ctx(),
+            );
+            if (!mv.ok) {
+              err.show(mv.message);
+              return;
+            }
+            res = { ...res, changes: A.mergeChanges(res.changes, mv.changes) };
+          }
+          const saved = await app.save(res, {
+            okMessage: editing
+              ? '保存しました'
+              : `${EVENT_KINDS[kind].label} ${formatYen(a.value)} を記録しました${remember?.get() ? '（いつもの動きに登録）' : ''}`,
+          });
           if (!saved.ok) {
             err.show(`${saved.message}。入力はそのまま残っています。`);
             return;
@@ -138,8 +238,8 @@ export function openEventSheet({ event, kind: initialKind = 'income' } = {}) {
           : null;
         return h('form', { class: 'stack', onsubmit: save.run, novalidate: true }, parts, h('div', { class: 'btn-row' }, delBtn, save.el));
       };
-      renderBody();
-      return h('div', { class: 'stack' }, kindSel?.el, body);
+      renderAll();
+      return root;
     },
   });
 }

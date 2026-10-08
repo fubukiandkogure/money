@@ -55,23 +55,74 @@ export function seedDemo(today) {
     const days = k === 0 ? Number(today.slice(8, 10)) : 28;
     for (let d = 1; d <= days; d += 1 + rnd(3)) {
       const c = cats[rnd(cats.length)];
-      const amount = { food: 400 + rnd(18) * 100, daily: 300 + rnd(10) * 100, shopping: 1500 + rnd(40) * 100, play: 2000 + rnd(30) * 100, transport: 200 + rnd(8) * 100, other: 500 + rnd(20) * 100 }[c];
+      const amount = {
+        food: 400 + rnd(18) * 100,
+        daily: 300 + rnd(10) * 100,
+        shopping: 1500 + rnd(40) * 100,
+        play: 2000 + rnd(30) * 100,
+        transport: 200 + rnd(8) * 100,
+        other: 500 + rnd(20) * 100,
+      }[c];
       const date = `${ym}-${String(d).padStart(2, '0')}`;
-      run(A.createEvent(state, { kind: 'expense', amountYen: amount, categoryId: c, occurredOn: date, memo: memos[c][rnd(memos[c].length)], isLuxury: rnd(9) === 0 }, ctx(date)));
+      run(
+        A.createEvent(
+          state,
+          { kind: 'expense', amountYen: amount, categoryId: c, occurredOn: date, memo: memos[c][rnd(memos[c].length)], isLuxury: rnd(9) === 0 },
+          ctx(date),
+        ),
+      );
     }
   }
   const prev = prevMonth(thisMonth);
-  run(A.createEvent(state, { kind: 'expense', amountYen: 3000, categoryId: 'food', occurredOn: `${prev}-12`, memo: 'ちょっといいケーキ', isLuxury: true }, ctx(`${prev}-12`)));
+  run(
+    A.createEvent(
+      state,
+      { kind: 'expense', amountYen: 3000, categoryId: 'food', occurredOn: `${prev}-12`, memo: 'ちょっといいケーキ', isLuxury: true },
+      ctx(`${prev}-12`),
+    ),
+  );
   run(A.createEvent(state, { kind: 'expense', amountYen: 48_000, categoryId: 'travel', occurredOn: `${prev}-20`, memo: '温泉旅行' }, ctx(`${prev}-20`)));
-  run(A.createEvent(state, { kind: 'transfer', amountYen: 30_000, fromAccountId: bank.id, toAccountId: nisa.id, occurredOn: `${prev}-27`, memo: 'つみたて' }, ctx(`${prev}-27`)));
-  run(A.createEvent(state, { kind: 'repayment', amountYen: 15_000, toAccountId: loan.id, fromAccountId: bank.id, occurredOn: `${prev}-27` }, ctx(`${prev}-27`)));
+  run(
+    A.createEvent(
+      state,
+      { kind: 'transfer', amountYen: 30_000, fromAccountId: bank.id, toAccountId: nisa.id, occurredOn: `${prev}-27`, memo: 'つみたて' },
+      ctx(`${prev}-27`),
+    ),
+  );
+  run(
+    A.createEvent(state, { kind: 'repayment', amountYen: 15_000, toAccountId: loan.id, fromAccountId: bank.id, occurredOn: `${prev}-27` }, ctx(`${prev}-27`)),
+  );
   run(A.createEvent(state, { kind: 'income', amountYen: 210_000, incomeType: 'salary', toAccountId: bank.id, occurredOn: `${prev}-25` }, ctx(`${prev}-25`)));
 
   // サブスク荘（架空のサービス名）
-  const video = run(A.createContract(state, { displayName: '架空どうが', status: 'active', priceYen: 990, frequency: 'monthly', startOn: start, nextDueOn: `${thisMonth}-15` }, ctx(start))).record;
-  const music = run(A.createContract(state, { displayName: '架空ミュージック', status: 'active', priceYen: 1080, frequency: 'monthly', startOn: start, nextDueOn: `${thisMonth}-05` }, ctx(start))).record;
-  const cloud = run(A.createContract(state, { displayName: '架空クラウド', status: 'active', priceYen: 3900, frequency: 'yearly', startOn: start, nextDueOn: `${m(-2)}-10` }, ctx(start))).record;
-  run(A.createContract(state, { displayName: '架空マンガ', status: 'trial', priceYen: 600, frequency: 'monthly', startOn: addDays(today, -5), trialEndsOn: addDays(today, 9) }, ctx(addDays(today, -5))));
+  const video = run(
+    A.createContract(
+      state,
+      { displayName: '架空どうが', status: 'active', priceYen: 990, frequency: 'monthly', startOn: start, nextDueOn: `${thisMonth}-15` },
+      ctx(start),
+    ),
+  ).record;
+  const music = run(
+    A.createContract(
+      state,
+      { displayName: '架空ミュージック', status: 'active', priceYen: 1080, frequency: 'monthly', startOn: start, nextDueOn: `${thisMonth}-05` },
+      ctx(start),
+    ),
+  ).record;
+  const cloud = run(
+    A.createContract(
+      state,
+      { displayName: '架空クラウド', status: 'active', priceYen: 3900, frequency: 'yearly', startOn: start, nextDueOn: `${m(-2)}-10` },
+      ctx(start),
+    ),
+  ).record;
+  run(
+    A.createContract(
+      state,
+      { displayName: '架空マンガ', status: 'trial', priceYen: 600, frequency: 'monthly', startOn: addDays(today, -5), trialEndsOn: addDays(today, 9) },
+      ctx(addDays(today, -5)),
+    ),
+  );
   run(A.changeTerms(state, music.id, { effectiveOn: `${m(1)}-01`, priceYen: 1180 }, ctx(today)));
   for (const k of [-2, -1]) {
     run(A.confirmPayment(state, { contractId: video.id, ym: m(k), amountYen: 990, occurredOn: `${m(k)}-15` }, ctx(`${m(k)}-16`)));

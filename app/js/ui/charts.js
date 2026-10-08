@@ -141,7 +141,8 @@ export function barList(rows, { total }) {
       h(
         'li',
         { class: ['barlist-row', r.value === 0 && 'zero'] },
-        h('span', { class: 'barlist-name' }, h('span', { 'aria-hidden': 'true' }, r.icon ? `${r.icon} ` : ''), r.name),
+        r.tile ?? null,
+        h('span', { class: 'barlist-name' }, r.name),
         h('span', { class: 'barlist-val num' }, formatYen(r.value)),
         h('span', { class: 'barlist-pct num' }, r.pct),
         h(

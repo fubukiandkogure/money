@@ -7,8 +7,7 @@ function randomHex(bytes) {
 }
 
 export function newId(prefix) {
-  const uuid =
-    typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID().replace(/-/g, '') : randomHex(16);
+  const uuid = typeof globalThis.crypto?.randomUUID === 'function' ? globalThis.crypto.randomUUID().replace(/-/g, '') : randomHex(16);
   return `${prefix}_${uuid}`;
 }
 

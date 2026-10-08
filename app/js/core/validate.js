@@ -171,6 +171,25 @@ export function validateSettings(s) {
   check(e, s.timeZone === 'Asia/Tokyo', '設定: タイムゾーンが不正です');
   check(e, s.currency === 'JPY', '設定: 通貨が不正です');
   check(e, ['auto', 'light', 'dark'].includes(s.theme), '設定: 表示テーマが不正です');
+  if (s.quickMoves !== undefined) {
+    if (!Array.isArray(s.quickMoves) || s.quickMoves.length > 20) e.push('設定: いつもの動きが不正です');
+    else {
+      const ids = new Set();
+      for (const m of s.quickMoves) {
+        const p = `いつもの動き ${m?.id ?? '?'}`;
+        if (!m || typeof m !== 'object') {
+          e.push(`${p}: 形式が不正です`);
+          continue;
+        }
+        check(e, isId(m.id) && !ids.has(m.id), `${p}: id が不正です`);
+        ids.add(m.id);
+        check(e, isText(30)(m.label) && m.label.trim().length > 0, `${p}: 名前が不正です`);
+        check(e, ['income', 'transfer', 'repayment', 'card_payment'].includes(m.kind), `${p}: 種類が不正です`);
+        check(e, isNullOr((v) => isYen(v) && v > 0)(m.amountYen), `${p}: 金額が不正です`);
+        check(e, isNullOr(isId)(m.fromAccountId) && isNullOr(isId)(m.toAccountId), `${p}: 口座が不正です`);
+      }
+    }
+  }
   return e;
 }
 
@@ -287,6 +306,11 @@ export function validateDataset(data, { maxErrors = 50 } = {}) {
   }
   const state = { accounts: data.accounts, snapshots: data.snapshots };
   for (const c of data.closes) verifyCloseRecord(state, c).forEach(push);
+
+  // いつもの動き → 口座
+  for (const m of data.settings.quickMoves ?? []) {
+    for (const k of ['fromAccountId', 'toAccountId']) if (m[k] && !accById.has(m[k])) push(`いつもの動き ${m.id}: 口座が見つかりません`);
+  }
 
   return errors;
 }

@@ -51,13 +51,26 @@ function shell() {
   tabbar = h(
     'nav',
     { class: 'tabbar', 'aria-label': 'メインメニュー' },
+    // 開いた画面（左のメニュー）でだけ見える町の看板
+    h('a', { class: 'rail-brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム`, tabindex: '-1' }, logo(40), h('span', { class: 'brand-name' }, APP_NAME)),
     TABS.map(([key, href, label, ic]) => h('a', { href, class: 'tab-link', dataset: { tab: key } }, icon(ic, 24), h('span', null, label))),
+    h('a', { href: '#/settings', class: 'tab-link rail-settings', dataset: { tab: 'settings' } }, icon('gear', 24), h('span', null, '設定')),
   );
-  fab = h('button', { class: 'fab', type: 'button', onclick: () => openExpenseSheet() }, icon('plus', 24), h('span', null, '支出'));
+  fab = h(
+    'button',
+    { class: 'fab', type: 'button', 'aria-label': '支出を記録', onclick: () => openExpenseSheet() },
+    icon('plus', 24),
+    h('span', { 'aria-hidden': 'true' }, '支出'),
+  );
   const top = h(
     'header',
     { class: 'topbar' },
-    h('a', { class: 'brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム` }, logo(30), h('span', { class: 'brand-name' }, APP_NAME)),
+    h(
+      'a',
+      { class: 'brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム` },
+      logo(34),
+      h('span', null, h('span', { class: 'brand-name' }, APP_NAME), h('span', { class: 'brand-sub' }, '懐具合を見守る小さな町')),
+    ),
     app.demo ? h('span', { class: 'demo-flag' }, 'デモ（架空データ）') : null,
     h('a', { class: 'icon-btn', href: '#/settings', 'aria-label': '設定・データ管理' }, icon('gear')),
   );
@@ -77,7 +90,11 @@ function render({ scroll = false } = {}) {
   try {
     const route = ROUTES.find(([re]) => re.test(path));
     if (!route) {
-      node = h('div', { class: 'page' }, h('div', { class: 'card' }, h('p', null, 'ページが見つかりません。'), h('a', { class: 'btn', href: '#/home' }, 'ホームへ')));
+      node = h(
+        'div',
+        { class: 'page' },
+        h('div', { class: 'card' }, h('p', null, 'ページが見つかりません。'), h('a', { class: 'btn', href: '#/home' }, 'ホームへ')),
+      );
     } else {
       const m = path.match(route[0]);
       tab = route[2];
@@ -88,7 +105,13 @@ function render({ scroll = false } = {}) {
     node = h(
       'div',
       { class: 'page' },
-      h('div', { class: 'card error-box', role: 'alert' }, h('p', null, h('strong', null, '画面の表示中に問題が起きました。'), ' データは変更していません。'), h('p', { class: 'small' }, String(e?.message ?? e)), h('a', { class: 'btn', href: '#/home' }, 'ホームへ')),
+      h(
+        'div',
+        { class: 'card error-box', role: 'alert' },
+        h('p', null, h('strong', null, '画面の表示中に問題が起きました。'), ' データは変更していません。'),
+        h('p', { class: 'small' }, String(e?.message ?? e)),
+        h('a', { class: 'btn', href: '#/home' }, 'ホームへ'),
+      ),
     );
   }
   main.replaceChildren(node);
@@ -126,7 +149,18 @@ function rescueRestoreBox() {
     if (!file) return;
     const parsed = parseBackup(await file.text());
     if (!parsed.ok) {
-      status.replaceChildren(h('div', { class: 'error-box' }, h('p', null, '復元できないファイルです。何も変更していません。'), h('ul', null, parsed.errors.slice(0, 6).map((e) => h('li', null, e)))));
+      status.replaceChildren(
+        h(
+          'div',
+          { class: 'error-box' },
+          h('p', null, '復元できないファイルです。何も変更していません。'),
+          h(
+            'ul',
+            null,
+            parsed.errors.slice(0, 6).map((e) => h('li', null, e)),
+          ),
+        ),
+      );
       return;
     }
     const ok = await confirmDialog({
@@ -164,7 +198,18 @@ function showLoadError(err) {
       h('h1', { class: 'page-title' }, '保存データを読み込めませんでした'),
       h('p', null, err.message ?? String(err)),
       h('p', null, 'データを初期化したり、見本のデータで置き換えたりはしていません。'),
-      details.length ? h('details', { class: 'more' }, h('summary', null, `くわしい内容（${details.length}件）`), h('ul', { class: 'small' }, details.slice(0, 20).map((d) => h('li', null, d)))) : null,
+      details.length
+        ? h(
+            'details',
+            { class: 'more' },
+            h('summary', null, `くわしい内容（${details.length}件）`),
+            h(
+              'ul',
+              { class: 'small' },
+              details.slice(0, 20).map((d) => h('li', null, d)),
+            ),
+          )
+        : null,
       h(
         'div',
         { class: 'card-actions wrap' },
@@ -180,7 +225,10 @@ function showLoadError(err) {
                     const s = await openForRescue(app.demo ? DEMO_DB_NAME : DB_NAME);
                     const dump = await s.rescueDump();
                     const now = nowStampJST();
-                    downloadText(`${APP_ID}-rescue-${now.slice(0, 10)}.json`, JSON.stringify({ appId: APP_ID, rescue: true, schemaVersion: SCHEMA_VERSION, exportedAt: now, data: dump }, null, 1));
+                    downloadText(
+                      `${APP_ID}-rescue-${now.slice(0, 10)}.json`,
+                      JSON.stringify({ appId: APP_ID, rescue: true, schemaVersion: SCHEMA_VERSION, exportedAt: now, data: dump }, null, 1),
+                    );
                   } catch (e) {
                     toast(`取り出せませんでした（${e.message}）`, { kind: 'error' });
                   }
@@ -190,7 +238,9 @@ function showLoadError(err) {
             )
           : null,
       ),
-      err.kind === 'corrupt' ? rescueRestoreBox() : h('p', { class: 'fine' }, 'ページを再読み込みしても直らない場合は、ブラウザを最新にしてからもう一度開いてください。'),
+      err.kind === 'corrupt'
+        ? rescueRestoreBox()
+        : h('p', { class: 'fine' }, 'ページを再読み込みしても直らない場合は、ブラウザを最新にしてからもう一度開いてください。'),
     ),
   );
   replace(document.getElementById('app'), box);

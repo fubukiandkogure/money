@@ -13,7 +13,17 @@ const ORIGIN = `http://localhost:${PORT}`;
 const BASE = `${ORIGIN}/money/`;
 const OUT = 'test-results/e2e';
 const NOW = new Date('2026-10-08T12:00:00+09:00');
-const PHONE = { viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' };
+// Galaxy Z Fold の閉じた画面（カバー）相当。数字の数え上げなどの動きは止めて、表示を確定させる
+const PHONE = {
+  viewport: { width: 412, height: 915 },
+  deviceScaleFactor: 2,
+  isMobile: true,
+  hasTouch: true,
+  locale: 'ja-JP',
+  timezoneId: 'Asia/Tokyo',
+  reducedMotion: 'reduce',
+};
+const INNER = { viewport: { width: 760, height: 860 } };
 
 await mkdir(OUT, { recursive: true });
 const server = await startServer(PORT);
@@ -138,7 +148,7 @@ async function seedBasic(page) {
   await waitClosed(page);
   await go(page, '#/assets/month/2026-09');
   await page.getByRole('button', { name: '2026年9月末を確定する' }).click();
-  await dialog(page).getByRole('button', { name: '確定する' }).click();
+  await dialog(page).getByRole('button', { name: '判子を押す（確定）' }).click();
   await waitClosed(page);
   await go(page, '#/home');
   await addExpense(page, { amount: 6800, category: '食費' });
@@ -161,7 +171,12 @@ async function test(name, fn) {
     console.log(`PASS  ${name}`);
   } catch (e) {
     results.push([name, 'FAIL', Date.now() - t0, e]);
-    console.log(`FAIL  ${name}\n      ${String(e.stack ?? e).split('\n').slice(0, 6).join('\n      ')}`);
+    console.log(
+      `FAIL  ${name}\n      ${String(e.stack ?? e)
+        .split('\n')
+        .slice(0, 6)
+        .join('\n      ')}`,
+    );
   } finally {
     for (const c of ctxs) await c.close().catch(() => {});
   }
@@ -248,7 +263,7 @@ await test('A08 月末確定に使った残高を訂正 → 要再確認、確�
   assert.match(await page.locator('main').textContent(), /確定に使った残高が訂正・取り消しされた/);
   await page.screenshot({ path: `${OUT}/A08-needs-review.png`, fullPage: true });
   await page.getByRole('button', { name: 'いまの残高で確定し直す' }).click();
-  await dialog(page).getByRole('button', { name: '確定する' }).click();
+  await dialog(page).getByRole('button', { name: '判子を押す（確定）' }).click();
   await waitClosed(page);
   assert.match(await page.locator('.status-line').textContent(), /確定.*第2版/);
   const db = await dumpDb(page);
@@ -383,7 +398,10 @@ await test('D03/D07 書き出し → 別の空の環境へ復元 → ID・履歴
     const sort = (arr) => [...arr].sort((x, y) => x.id.localeCompare(y.id));
     assert.deepEqual(sort(dbB[c]), sort(dbA[c]), c);
   }
-  assert.deepEqual(dbB.meta.find((m) => m.key === 'settings'), dbA.meta.find((m) => m.key === 'settings'));
+  assert.deepEqual(
+    dbB.meta.find((m) => m.key === 'settings'),
+    dbA.meta.find((m) => m.key === 'settings'),
+  );
   assert.equal(await b.evaluate(() => document.documentElement.dataset.theme), 'dark');
   await go(b, '#/home');
   assert.equal((await b.locator('.hero-num').first().textContent()).trim(), '¥70,000');
@@ -403,7 +421,11 @@ await test('D04 壊れたJSON・別アプリ・新しすぎる版は拒否し、
     ['broken.json', '{"appId":"futokoro-machi","schemaVersion":1,"data":{"accounts":[', /JSONとして読み込めません/],
     ['subseat.json', JSON.stringify({ version: '0.7.1', subs: [{ name: 'x' }] }), /ふところ町のバックアップではありません/],
     ['future.json', JSON.stringify({ appId: 'futokoro-machi', schemaVersion: 99, exportedAt: '2030-01-01T00:00:00.000+09:00', data: {} }), /新しい版/],
-    ['invalid.json', JSON.stringify({ appId: 'futokoro-machi', schemaVersion: 1, exportedAt: '2026-10-08T12:00:00.000+09:00', data: { accounts: [{ id: 'x' }] } }), /復元できないファイル/],
+    [
+      'invalid.json',
+      JSON.stringify({ appId: 'futokoro-machi', schemaVersion: 1, exportedAt: '2026-10-08T12:00:00.000+09:00', data: { accounts: [{ id: 'x' }] } }),
+      /復元できないファイル/,
+    ],
   ];
   for (const [name, body, re] of cases) {
     await page.setInputFiles('input[type=file]', { name, mimeType: 'application/json', buffer: Buffer.from(body) });
@@ -532,7 +554,10 @@ await test('他タブ：古い画面の保存で新しい内容を上書きし�
   await d.getByRole('button', { name: '記録する' }).click();
   await waitClosed(p2);
   const db = await dumpDb(p2);
-  assert.deepEqual(db.events.map((e) => e.amountYen).sort((x, y) => x - y), [111, 222]);
+  assert.deepEqual(
+    db.events.map((e) => e.amountYen).sort((x, y) => x - y),
+    [111, 222],
+  );
   // 通知を受け取れなかったタブも、画面に戻ったときに読み直す
   await p1.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await p1.waitForFunction(() => document.querySelector('main').textContent.includes('¥222'), null, { timeout: 5000 });
@@ -551,7 +576,7 @@ await test('D08 別のブラウザ（別の保存領域）には自動同期さ�
   await seedBasic(a);
   const b = await newPage(await mk());
   await open(b);
-  assert.match(await b.locator('main').textContent(), /まずは口座を登録しましょう/);
+  assert.match(await b.locator('main').textContent(), /ようこそ、ふところ町へ/);
   await go(b, '#/settings');
   assert.match(await b.locator('main').textContent(), /別のスマホや別のブラウザでは別のデータです（自動同期はありません）/);
 });
@@ -594,7 +619,7 @@ await test('D10 同じドメインの旧サブスク荘の保存キーと別ア�
   });
   await open(page);
   await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.waitForFunction(async () => (await caches.keys()).includes('futokoro-machi-shell-1.0.0'), null, { timeout: 10000 });
+  await page.waitForFunction(async () => (await caches.keys()).includes('futokoro-machi-shell-1.1.0'), null, { timeout: 10000 });
   await addExpense(page, { amount: 500, category: '食費' });
   await page.reload();
   await page.waitForSelector('html[data-ready="1"]');
@@ -604,11 +629,14 @@ await test('D10 同じドメインの旧サブスク荘の保存キーと別ア�
     keys: await caches.keys(),
     scope: (await navigator.serviceWorker.getRegistration())?.scope,
     old: await (await (await caches.open('subseat-v0.7.1')).match('/subseat/index.html'))?.text(),
+    fonts: (await (await caches.open('futokoro-machi-fonts-1')).keys()).length,
   }));
   assert.equal(info.ls, JSON.stringify({ subs: [{ name: 'テスト' }], v: '0.7.1' }));
   assert.ok(info.keys.includes('subseat-v0.7.1'), '別アプリのキャッシュが残る');
   assert.equal(info.old, 'old app');
   assert.ok(!info.keys.includes('futokoro-machi-shell-0.9.0'), '自分の古いキャッシュは整理する');
+  assert.ok(info.keys.includes('futokoro-machi-fonts-1'), '書体は版をまたぐ長期キャッシュに入る');
+  assert.ok(info.fonts > 0, `書体の分割ファイルがキャッシュされる (${info.fonts})`);
   assert.equal(info.scope, `${BASE}`);
   // オフラインでも開ける（データは端末内）
   await ctx.setOffline(true);
@@ -665,8 +693,8 @@ await test('操作の一巡（振替・返済・編集・削除と元に戻す�
   await page.getByRole('button', { name: '入金・振替・返済など' }).click();
   d = dialog(page);
   await d.getByRole('radio', { name: '返済' }).click();
-  await d.getByRole('textbox', { name: '金額' }).first().fill('20000');
-  await d.getByRole('textbox', { name: '金額' }).nth(1).fill('150');
+  await d.getByRole('textbox', { name: '金額' }).fill('20000');
+  await d.getByRole('textbox', { name: '利息' }).fill('150');
   await d.getByRole('button', { name: '記録する' }).click();
   await waitClosed(page);
   await go(page, '#/report/spending');
@@ -741,6 +769,176 @@ await test('操作の一巡（振替・返済・編集・削除と元に戻す�
   noErrors(page);
 });
 
+await test('はじめの準備 → 先月末の残高をまとめて記録 → そのまま確定（朱の判子）', async (mk) => {
+  const ctx = await mk();
+  const page = await newPage(ctx);
+  await open(page);
+  await page.getByRole('button', { name: 'はじめの準備をする' }).click();
+  let d = dialog(page);
+  const names = await d.getByRole('textbox', { name: '名前' }).evaluateAll((els) => els.map((e) => e.value));
+  assert.deepEqual(names, ['給与の口座', '貯金の口座', 'NISA', '奨学金']);
+  await d.getByRole('textbox', { name: '名前' }).nth(1).fill('貯金の口座（テスト）');
+  await d.getByRole('textbox', { name: '当初の元金' }).fill('2400000');
+  await page.screenshot({ path: `${OUT}/setup-wizard.png`, fullPage: true });
+  await d.getByRole('button', { name: 'この内容で始める' }).click();
+  // 続けて 9月末のまとめ入力が開く
+  await page.waitForFunction(() => document.querySelector('.sheet-title')?.textContent.includes('2026年9月末の残高'));
+  d = dialog(page);
+  for (const [label, v] of [
+    ['給与の口座の残高', '85000'],
+    ['貯金の口座（テスト）の残高', '420000'],
+    ['NISAの評価額', '310000'],
+    ['奨学金の元金の残高', '1460000'],
+  ]) {
+    await d.getByRole('textbox', { name: label }).fill(v);
+  }
+  await page.screenshot({ path: `${OUT}/bulk-month-end.png`, fullPage: true });
+  await d.getByRole('button', { name: '9/30 の終了時点の残高として記録' }).click();
+  await waitClosed(page);
+  assert.match(await toastText(page), /2026年9月末を確定しました/);
+  const db = await dumpDb(page);
+  assert.equal(db.accounts.length, 4);
+  assert.ok(db.accounts.every((a) => a.managedFrom === '2026-09-30'));
+  assert.equal(db.accounts.find((a) => a.type === 'loan').initialPrincipalYen, 2_400_000);
+  assert.equal(db.snapshots.length, 4);
+  assert.ok(db.snapshots.every((x) => x.asOfDate === '2026-09-30' && x.kind === 'actual' && x.monthEndVerified));
+  assert.equal(db.closes.length, 1);
+  assert.equal(db.closes[0].totals.net, 85000 + 420000 + 310000 - 1460000);
+  assert.equal(db.meta.find((m) => m.key === 'settings').value.quickMoves.length, 4);
+  // ホーム：判子・猫・坂道
+  await go(page, '#/home');
+  assert.equal((await page.locator('.hero-num').first().textContent()).trim(), '−¥645,000');
+  assert.equal(await page.locator('.hanko-slot.st-confirmed').count(), 1);
+  assert.match(await page.locator('.hero-caption').textContent(), /確定の灯り 1\/1・猫が昼寝中/);
+  assert.equal(await page.locator('.slope .walker').count(), 1);
+  await page.screenshot({ path: `${OUT}/setup-home.png`, fullPage: true });
+  noErrors(page);
+});
+
+await test('いつもの動き：1タップで呼び出して記録、新しく登録もできる', async (mk) => {
+  const ctx = await mk();
+  const page = await newPage(ctx);
+  await open(page);
+  await page.getByRole('button', { name: 'はじめの準備をする' }).click();
+  await dialog(page).getByRole('radio', { name: '今日から' }).click();
+  await dialog(page).getByRole('button', { name: 'この内容で始める' }).click();
+  await waitClosed(page);
+  await go(page, '#/records');
+  await page.getByRole('button', { name: /貯金の口座へ/ }).click();
+  let d = dialog(page);
+  assert.equal(await d.getByRole('radio', { name: '振替・積立' }).getAttribute('aria-checked'), 'true');
+  assert.equal(await d.getByRole('combobox', { name: '移動元' }).locator('option:checked').textContent(), '給与の口座');
+  assert.equal(await d.getByRole('combobox', { name: '移動先' }).locator('option:checked').textContent(), '貯金の口座');
+  await d.getByRole('textbox', { name: '金額' }).fill('35000');
+  await d.getByRole('button', { name: '記録する' }).click();
+  await waitClosed(page);
+  let db = await dumpDb(page);
+  const ev = db.events[0];
+  assert.equal(ev.kind, 'transfer');
+  assert.equal(ev.amountYen, 35000);
+  assert.equal(ev.memo, '貯金の口座へ');
+  // 新しい動きを「いつもの動き」に登録（金額も覚える）
+  await page.getByRole('button', { name: '入金・振替・返済など' }).click();
+  d = dialog(page);
+  await d.getByRole('radio', { name: 'カード精算' }).click();
+  await d.getByRole('textbox', { name: '金額' }).fill('12000');
+  await d.getByLabel('この内容を「いつもの動き」に登録する').check();
+  await d.getByRole('textbox', { name: 'いつもの動きの名前' }).fill('カードの引き落とし');
+  await d.getByRole('button', { name: '記録する' }).click();
+  await waitClosed(page);
+  db = await dumpDb(page);
+  const moves = db.meta.find((m) => m.key === 'settings').value.quickMoves;
+  assert.equal(moves.length, 5);
+  assert.deepEqual([moves[4].label, moves[4].kind, moves[4].amountYen], ['カードの引き落とし', 'card_payment', 12000]);
+  assert.equal(db.events.length, 2);
+  // 設定から消せる
+  await go(page, '#/settings');
+  await page.getByRole('button', { name: 'カードの引き落としを消す' }).click();
+  await dialog(page).getByRole('button', { name: '消す' }).click();
+  await waitClosed(page);
+  db = await dumpDb(page);
+  assert.equal(db.meta.find((m) => m.key === 'settings').value.quickMoves.length, 4);
+  assert.equal(db.events.length, 2, '記録済みの動きは残る');
+  noErrors(page);
+});
+
+await test('Fold：開いた画面は左のメニュー＋2段組み、閉じた画面は下のメニュー＋1段', async (mk) => {
+  const inner = await newPage(await mk(INNER));
+  await open(inner, '#/home', { query: '?demo=1' });
+  await inner.waitForFunction(() => document.querySelector('.hero-num'));
+  const rail = await inner.locator('.tabbar').boundingBox();
+  assert.ok(rail.x === 0 && rail.width < 120 && rail.height > 800, `左のメニュー ${JSON.stringify(rail)}`);
+  const cols = await inner.locator('.cols > .col').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
+  assert.ok(cols.length === 2 && cols[1] > cols[0] + 200, `2段組み ${cols}`);
+  const fab = await inner.locator('.fab').boundingBox();
+  assert.ok(fab.x < 100 && fab.y < 220, `支出ボタンは左のメニューの中 ${JSON.stringify(fab)}`);
+  assert.equal(await inner.locator('.topbar').isVisible(), false);
+  await inner.locator('.fab').click();
+  const sheet = await inner.locator('.sheet').boundingBox();
+  assert.ok(sheet.width <= 560 && sheet.x > 120, `入力は中央のダイアログ ${JSON.stringify(sheet)}`);
+  await inner.screenshot({ path: `${OUT}/fold-inner-entry.png` });
+  // 横向き
+  await inner.setViewportSize({ width: 860, height: 760 });
+  await inner.keyboard.press('Escape');
+  await waitClosed(inner);
+  for (const r of ['assets', 'subs', 'report/spending', 'settings']) {
+    await go(inner, `#/${r}`);
+    const overflow = await inner.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(overflow <= 0, `${r} が横にはみ出している`);
+  }
+
+  const cover = await newPage(await mk());
+  await open(cover, '#/home', { query: '?demo=1' });
+  await cover.waitForFunction(() => document.querySelector('.hero-num'));
+  const bar = await cover.locator('.tabbar').boundingBox();
+  assert.ok(bar.y > 800 && bar.width === 412, '下のメニュー');
+  assert.equal(await cover.locator('.tabbar .tab-link:visible').count(), 5, '閉じた画面のメニューは5つ');
+  const cols2 = await cover.locator('.cols > .col').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
+  assert.equal(cols2[0], cols2[1], '1段に積む');
+  noErrors(inner);
+  noErrors(cover);
+});
+
+await test('Fold：半分折ったフレックスモードでは、入力シートが下半分（本の形なら右半分）に入る', async (mk) => {
+  const ctx = await mk(INNER);
+  const page = await newPage(ctx);
+  await open(page, '#/home', { query: '?demo=1' });
+  await page.waitForFunction(() => document.querySelector('.hero-num'));
+  const cdp = await ctx.newCDPSession(page);
+  const fold = (o) =>
+    cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: o === 'horizontal' ? 760 : 860,
+      height: o === 'horizontal' ? 860 : 760,
+      deviceScaleFactor: 2,
+      mobile: true,
+      displayFeature: { orientation: o, offset: 430, maskLength: 0 },
+    });
+  // Playwright の操作は画面のエミュレーションを上書きするので、ここでは DevTools プロトコルとページ内の操作だけを使う
+  for (const [o, expect] of [
+    ['horizontal', { x: 0, y: 430, w: 760, h: 430 }],
+    ['vertical', { x: 430, y: 0, w: 430, h: 760 }],
+  ]) {
+    await fold(o);
+    await new Promise((r) => setTimeout(r, 300));
+    const box = await page.evaluate(
+      () =>
+        new Promise((res) => {
+          document.querySelector('.fab').click();
+          setTimeout(() => {
+            const b = document.querySelector('.sheet').getBoundingClientRect();
+            res({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) });
+          }, 500);
+        }),
+    );
+    assert.deepEqual(box, expect, o);
+    const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    await writeFile(`${OUT}/fold-flex-${o}.png`, Buffer.from(shot.data, 'base64'));
+    await page.evaluate(() => document.querySelector('.sheet-head .icon-btn').click());
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  noErrors(page);
+});
+
 await test('ダークテーマ・デモ（架空データ）の全画面表示', async (mk) => {
   const ctx = await mk({ colorScheme: 'dark' });
   const page = await newPage(ctx);
@@ -764,5 +962,12 @@ await browser.close();
 server.close();
 const failed = results.filter((r) => r[1] === 'FAIL');
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
-await writeFile(`${OUT}/results.json`, JSON.stringify(results.map(([n, s, ms, e]) => ({ name: n, status: s, ms, error: e ? String(e.message ?? e) : undefined })), null, 1));
+await writeFile(
+  `${OUT}/results.json`,
+  JSON.stringify(
+    results.map(([n, s, ms, e]) => ({ name: n, status: s, ms, error: e ? String(e.message ?? e) : undefined })),
+    null,
+    1,
+  ),
+);
 process.exit(failed.length ? 1 : 0);

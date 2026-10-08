@@ -1,7 +1,7 @@
 // アプリ固有の識別子。旧サブスク荘（subseat:v1 等）とは別の名前を使う。
 export const APP_ID = 'futokoro-machi';
 export const APP_NAME = 'ふところ町';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 /** バックアップJSON・端末内データの構造の版 */
 export const SCHEMA_VERSION = 1;
@@ -12,15 +12,7 @@ export const DB_NAME = 'futokoro-machi';
 export const DEMO_DB_NAME = 'futokoro-machi-demo';
 
 /** データを持つコレクション（IndexedDB のオブジェクトストア名と同じ） */
-export const COLLECTIONS = [
-  'accounts',
-  'snapshots',
-  'events',
-  'contracts',
-  'contractTerms',
-  'paymentLinks',
-  'closes',
-];
+export const COLLECTIONS = ['accounts', 'snapshots', 'events', 'contracts', 'contractTerms', 'paymentLinks', 'closes'];
 
 export const ACCOUNT_TYPES = {
   bank: { label: '銀行', group: 'asset', icon: '🏦' },

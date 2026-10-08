@@ -28,9 +28,7 @@ export function scopeAt(accounts, date) {
 
 export function sortAccounts(accounts) {
   const order = { bank: 0, investment: 1, loan: 2 };
-  return [...accounts].sort(
-    (a, b) => order[a.type] - order[b.type] || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.createdAt.localeCompare(b.createdAt),
-  );
+  return [...accounts].sort((a, b) => order[a.type] - order[b.type] || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,9 +103,7 @@ export function latestActual(snapshots, accountId, today) {
 
 /** 最新の実残高より新しい推計（将来日の予定も含む）。合計には使わない */
 export function newerEstimate(snapshots, accountId, latestActualDate) {
-  const list = effectiveSnapshotsOf(snapshots, accountId).filter(
-    (s) => s.kind === 'estimate' && (!latestActualDate || s.asOfDate > latestActualDate),
-  );
+  const list = effectiveSnapshotsOf(snapshots, accountId).filter((s) => s.kind === 'estimate' && (!latestActualDate || s.asOfDate > latestActualDate));
   if (list.length === 0) return null;
   return list.reduce((m, s) => (s.asOfDate > m.asOfDate || (s.asOfDate === m.asOfDate && s.recordedAt > m.recordedAt) ? s : m));
 }
@@ -139,7 +135,10 @@ export function currentOverview(state, today) {
   };
   const assets = group(isAssetAccount);
   const loans = group(isLoanAccount);
-  const dates = rows.filter((r) => r.latest).map((r) => r.latest.asOfDate).sort();
+  const dates = rows
+    .filter((r) => r.latest)
+    .map((r) => r.latest.asOfDate)
+    .sort();
   const missing = [...assets.missing, ...loans.missing];
   return {
     rows,

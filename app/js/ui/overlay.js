@@ -48,7 +48,13 @@ export function openSheet({ title, build, isDirty, onClose, className }) {
 
   async function requestClose() {
     if (isDirty?.()) {
-      const ok = await confirmDialog({ title: '入力を破棄しますか？', message: '保存していない入力は消えます。', okLabel: '破棄する', cancelLabel: '入力に戻る', danger: true });
+      const ok = await confirmDialog({
+        title: '入力を破棄しますか？',
+        message: '保存していない入力は消えます。',
+        okLabel: '破棄する',
+        cancelLabel: '入力に戻る',
+        danger: true,
+      });
       if (!ok) return;
     }
     api.close();
@@ -211,4 +217,11 @@ export function toast(message, { kind = 'ok', action, duration } = {}) {
   const ms = duration ?? (kind === 'error' ? 0 : action ? 7000 : 3500);
   if (ms > 0) setTimeout(dismiss, ms);
   return dismiss;
+}
+
+/** 月末を確定したときの朱の判子（動きを減らす設定ではアニメーションしない） */
+export function playStamp(text = '確定') {
+  const el = h('div', { class: 'stamp-anim play', 'aria-hidden': 'true' }, h('span', null, text));
+  document.body.append(el);
+  setTimeout(() => el.remove(), 1300);
 }

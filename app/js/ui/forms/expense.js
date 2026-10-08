@@ -2,7 +2,20 @@
 import { h } from '../dom.js';
 import { app } from '../../app.js';
 import { openSheet, confirmDialog, toast } from '../overlay.js';
-import { amountInput, categoryPicker, dateInput, luxuryToggle, field, setFieldError, textInput, select, checkbox, saveButton, formError, monthInput } from '../fields.js';
+import {
+  amountInput,
+  categoryPicker,
+  dateInput,
+  luxuryToggle,
+  field,
+  setFieldError,
+  textInput,
+  select,
+  checkbox,
+  saveButton,
+  formError,
+  monthInput,
+} from '../fields.js';
 import * as A from '../../core/actions.js';
 import { categoryById, PAYMENT_METHODS, LUXURY_LABEL } from '../../core/constants.js';
 import { formatYen } from '../../core/money.js';
@@ -47,7 +60,18 @@ export async function deleteEventWithUndo(ev) {
 export function openExpenseSheet({ event, preset = {} } = {}) {
   const editing = !!event;
   const today = app.today();
-  const init = event ?? { amountYen: null, categoryId: null, datePrecision: 'day', occurredOn: today, yearMonth: today.slice(0, 7), isLuxury: false, memo: '', paymentMethod: null, accountId: null, ...preset };
+  const init = event ?? {
+    amountYen: null,
+    categoryId: null,
+    datePrecision: 'day',
+    occurredOn: today,
+    yearMonth: today.slice(0, 7),
+    isLuxury: false,
+    memo: '',
+    paymentMethod: null,
+    accountId: null,
+    ...preset,
+  };
 
   let amountCtl = null;
   openSheet({
@@ -63,7 +87,12 @@ export function openExpenseSheet({ event, preset = {} } = {}) {
       const date = dateInput({ value: init.occurredOn ?? today, today });
       const month = monthInput({ value: init.yearMonth });
       const dayBox = h('div', { hidden: precision === 'month' }, date.el);
-      const monthBox = h('div', { hidden: precision !== 'month' }, month.el, h('p', { class: 'field-hint' }, '日付が分からない記録は、月の合計にだけ入り、日別・週別には配分しません。'));
+      const monthBox = h(
+        'div',
+        { hidden: precision !== 'month' },
+        month.el,
+        h('p', { class: 'field-hint' }, '日付が分からない記録は、月の合計にだけ入り、日別・週別には配分しません。'),
+      );
       const precisionToggle = h(
         'button',
         {
@@ -82,7 +111,11 @@ export function openExpenseSheet({ event, preset = {} } = {}) {
       const memo = textInput({ value: init.memo, placeholder: '任意', maxlength: 200, label: 'メモ' });
       const pm = select(Object.entries(PAYMENT_METHODS), init.paymentMethod, { emptyLabel: '指定しない', label: '支払方法' });
       const accounts = sortAccounts(app.state.accounts.filter((a) => a.type !== 'loan' && (!a.archivedAt || a.id === init.accountId)));
-      const acc = select(accounts.map((a) => [a.id, a.name]), init.accountId, { emptyLabel: '指定しない', label: '口座' });
+      const acc = select(
+        accounts.map((a) => [a.id, a.name]),
+        init.accountId,
+        { emptyLabel: '指定しない', label: '口座' },
+      );
       const details = h(
         'details',
         { class: 'more', open: !!(init.paymentMethod || init.accountId) || undefined },
@@ -180,7 +213,12 @@ export function openExpenseSheet({ event, preset = {} } = {}) {
         amountField,
         catField,
         field('日付', h('div', null, dayBox, monthBox, precisionToggle)),
-        h('div', { class: 'row gap' }, lux.el, h('p', { class: 'field-hint grow' }, `${LUXURY_LABEL}は、自分で「ちょっと贅沢」と思った支出の印。金額や集計は変わりません。`)),
+        h(
+          'div',
+          { class: 'row gap' },
+          lux.el,
+          h('p', { class: 'field-hint grow' }, `${LUXURY_LABEL}は、自分で「ちょっと贅沢」と思った支出の印。金額や集計は変わりません。`),
+        ),
         field('メモ', memo, { id: memo.id }),
         details,
         err.el,

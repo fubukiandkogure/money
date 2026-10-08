@@ -1,18 +1,38 @@
-// 資産：口座一覧・残高の確認日・履歴・月末チェック
+// 資産：口座（通帳）・残高の確認日・履歴・月末チェック
 import { h } from '../ui/dom.js';
 import { app } from '../app.js';
-import { icon } from '../ui/icons.js';
-import { yen, badge, card, cardHead, pageTitle, button, helpButton, HELP, closeBadge, emptyState, asOf, deltaView, kv } from '../ui/parts.js';
-import { confirmDialog } from '../ui/overlay.js';
+import { icon, accIcon } from '../ui/icons.js';
+import {
+  yen,
+  badge,
+  card,
+  cardHead,
+  pageTitle,
+  button,
+  helpButton,
+  HELP,
+  closeBadge,
+  emptyState,
+  asOf,
+  deltaView,
+  kv,
+  cols,
+  postmark,
+  accTile,
+} from '../ui/parts.js';
+import { confirmDialog, playStamp } from '../ui/overlay.js';
 import { ACCOUNT_TYPES } from '../core/constants.js';
 import { currentOverview, sortAccounts, latestActual, newerEstimate, monthEndStatus, PROBLEM_LABELS, loanProgress, snapshotIndex } from '../core/assets.js';
 import { effectiveClose, checklistMonths, monthReport, REVIEW_REASON_LABELS, COMPARE_REASON_LABELS } from '../core/closes.js';
 import { formatDateShort, formatDateLong, formatMonth, formatStamp, isLastDayOfMonth, lastDayOfMonth, isValidMonth } from '../core/dates.js';
-import { formatYen, formatPercent } from '../core/money.js';
+import { formatYen, formatPercent, formatDelta } from '../core/money.js';
 import * as A from '../core/actions.js';
 import { openAccountSheet, openSnapshotSheet, invalidateSnapshotFlow, verifyAsMonthEnd } from '../ui/forms/assets.js';
+import { openSetupSheet, openMonthEndBulkSheet } from '../ui/forms/setup.js';
 
 const view = { showArchived: false };
+
+const PB_KIND = { bank: '普 通 預 金', investment: 'つ み た て', loan: '奨 学 金' };
 
 export function renderAssets() {
   const state = app.state;
@@ -21,84 +41,124 @@ export function renderAssets() {
   const active = sortAccounts(state.accounts.filter((a) => !a.archivedAt));
   const archived = sortAccounts(state.accounts.filter((a) => a.archivedAt));
 
+  if (state.accounts.length === 0) {
+    return h(
+      'div',
+      { class: 'page' },
+      pageTitle('資産', {
+        kicker: 'KURA',
+        sub: '確認した残高だけを合計します',
+        action: button('口座を追加', () => openAccountSheet(), { cls: 'btn small', iconName: 'plus' }),
+      }),
+      card(
+        emptyState(
+          '蔵はまだ空っぽです',
+          '銀行・投資（NISAなど）・奨学金を登録して、確認した残高を記録しましょう。よくある組み合わせは「はじめの準備」でまとめて登録できます。',
+          button('はじめの準備をする', () => openSetupSheet(), { cls: 'btn primary', iconName: 'sparkle' }),
+        ),
+      ),
+    );
+  }
+
   const groups = Object.entries(ACCOUNT_TYPES).map(([type, meta]) => {
     const list = active.filter((a) => a.type === type);
     if (list.length === 0) return null;
-    return h('div', { class: 'acc-group' }, h('h3', { class: 'group-title' }, `${meta.icon} ${meta.label}`), h('ul', { class: 'acc-list' }, list.map((a) => accountRow(a, today))));
+    return h(
+      'div',
+      { class: 'acc-group' },
+      h('h3', { class: 'group-title' }, accTile(type, 's'), meta.label),
+      h(
+        'div',
+        { class: 'passbooks' },
+        list.map((a) => passbook(a, today)),
+      ),
+    );
   });
+
+  const summary = card(
+    h('div', { class: 'card-head' }, h('h2', { class: 'card-title' }, '確認済み残高の合計'), helpButton('管理上の純資産', HELP.net)),
+    h(
+      'dl',
+      { class: 'kv-list' },
+      kv('総資産（銀行＋投資）', yen(ov.assets.total)),
+      kv('奨学金の残り', yen(ov.loans.total)),
+      kv('管理上の純資産', yen(ov.net, { cls: 'strong' })),
+    ),
+    ov.mixedDates
+      ? h('p', { class: 'note-line' }, icon('calendar', 16), `確認日が混在（${formatDateShort(ov.oldestDate)}〜${formatDateShort(ov.newestDate)}）`)
+      : null,
+    ov.missing.length ? h('p', { class: 'note-line warn' }, icon('alert', 16), `未確認 ${ov.missing.length}件を含まない部分合計です`) : null,
+  );
 
   return h(
     'div',
     { class: 'page' },
-    pageTitle('資産', { sub: '確認した残高だけを合計します', action: button('口座を追加', () => openAccountSheet(), { cls: 'btn small', iconName: 'plus' }) }),
-    state.accounts.length === 0
-      ? card(
-          emptyState(
-            '口座がまだありません',
-            '銀行・投資（NISAなど）・奨学金を、それぞれ登録してください。複数あってもかまいません。',
-            button('口座を追加', () => openAccountSheet(), { cls: 'btn primary', iconName: 'plus' }),
-          ),
-        )
-      : [
-          card(
-            h('div', { class: 'card-head' }, h('h2', { class: 'card-title' }, '確認済み残高の合計'), helpButton('管理上の純資産', HELP.net)),
-            h(
-              'dl',
-              { class: 'kv-list' },
-              kv('総資産（銀行＋投資）', yen(ov.assets.total)),
-              kv('奨学金の残り', yen(ov.loans.total)),
-              kv('管理上の純資産', yen(ov.net, { cls: 'strong' })),
-            ),
-            ov.mixedDates ? h('p', { class: 'note-line' }, icon('calendar', 16), `確認日が混在（${formatDateShort(ov.oldestDate)}〜${formatDateShort(ov.newestDate)}）`) : null,
-            ov.missing.length ? h('p', { class: 'note-line warn' }, icon('alert', 16), `未確認 ${ov.missing.length}件を含まない部分合計です`) : null,
-          ),
-          card(groups),
-          monthChecklist(today),
-          archived.length
-            ? card(
+    pageTitle('資産', {
+      kicker: 'KURA',
+      sub: '確認した残高だけを合計します',
+      action: button('口座を追加', () => openAccountSheet(), { cls: 'btn small', iconName: 'plus' }),
+    }),
+    cols(
+      [summary, card(groups)],
+      [
+        monthChecklist(today),
+        archived.length
+          ? card(
+              h(
+                'details',
+                { class: 'more', open: view.showArchived || undefined, ontoggle: (e) => (view.showArchived = e.target.open) },
+                h('summary', null, `アーカイブした口座（${archived.length}）`),
+                h('p', { class: 'fine' }, 'アーカイブは一覧の整理です。過去の残高・月末確定はそのまま残り、管理期間内なら月末の対象にもなります。'),
                 h(
-                  'details',
-                  { class: 'more', open: view.showArchived || undefined, ontoggle: (e) => (view.showArchived = e.target.open) },
-                  h('summary', null, `アーカイブした口座（${archived.length}）`),
-                  h('p', { class: 'fine' }, 'アーカイブは一覧の整理です。過去の残高・月末確定はそのまま残り、管理期間内なら月末の対象にもなります。'),
-                  h('ul', { class: 'acc-list' }, archived.map((a) => accountRow(a, today))),
+                  'div',
+                  { class: 'passbooks' },
+                  archived.map((a) => passbook(a, today)),
                 ),
-              )
-            : null,
-        ],
+              ),
+            )
+          : null,
+      ],
+    ),
   );
 }
 
-function accountRow(a, today) {
+function passbook(a, today) {
   const { snapshot, conflict } = latestActual(app.state.snapshots, a.id, today);
   const est = newerEstimate(app.state.snapshots, a.id, snapshot?.asOfDate);
   const ended = a.managedUntil && a.managedUntil <= today;
   return h(
-    'li',
-    { class: 'acc-row' },
+    'div',
+    { class: ['passbook-wrap', ended && 'ended'] },
     h(
       'a',
-      { class: 'acc-main', href: `#/assets/account/${encodeURIComponent(a.id)}` },
-      h('span', { class: 'acc-name' }, a.name),
+      { class: ['passbook', `acc-${a.type}`], href: `#/assets/account/${encodeURIComponent(a.id)}` },
+      h('span', { class: 'pb-kind' }, PB_KIND[a.type]),
+      h('span', { class: 'pb-emblem', 'aria-hidden': 'true' }, accIcon(a.type, 24)),
+      h('span', { class: 'pb-name' }, a.name),
+      h('span', { class: 'pb-amount' }, snapshot ? formatYen(snapshot.amountYen) : '—'),
       h(
         'span',
-        { class: 'acc-meta' },
-        snapshot ? asOf(snapshot.asOfDate, today) : badge('未確認', 'warn', 'alert'),
+        { class: 'pb-meta' },
+        snapshot ? h('span', null, asOf(snapshot.asOfDate, today)) : badge('未確認', 'warn', 'alert'),
         conflict ? badge('同じ日に複数', 'warn') : null,
         est ? badge(`推計 ${formatYen(est.amountYen)}（${formatDateShort(est.asOfDate)}）`, 'est') : null,
         ended ? badge(a.endKind === 'zero' ? '解約・完済' : '管理終了', 'neutral') : null,
       ),
     ),
-    h('span', { class: 'acc-amount' }, snapshot ? yen(snapshot.amountYen) : h('span', { class: 'muted' }, '—')),
     ended ? null : button('', () => openSnapshotSheet({ account: a }), { cls: 'icon-btn update', iconName: 'edit', label: `${a.name}の残高を記録` }),
   );
 }
 
 function monthChecklist(today) {
   const months = checklistMonths(app.state, today).slice(0, 12);
-  if (months.length === 0) return null;
+  if (months.length === 0) {
+    return card(
+      cardHead('月末チェック', { action: helpButton('月末の確定', HELP.monthEnd) }),
+      h('p', { class: 'small muted' }, '管理を始めた月の月末を迎えると、ここで月末の残高をそろえて確定できます。'),
+    );
+  }
   return card(
-    cardHead('月末チェック', { action: helpButton('月末の確定', HELP.monthEnd), sub: '月末の終了時点の残高がそろった月を確定します' }),
+    cardHead('月末チェック', { action: helpButton('月末の確定', HELP.monthEnd), sub: '月末の終了時点の残高がそろった月に、朱の判子を押します' }),
     h(
       'ul',
       { class: 'month-list' },
@@ -112,14 +172,25 @@ function monthChecklist(today) {
         else if (ms.items.length === 0) info = h('span', { class: 'muted' }, '対象の口座なし');
         else if (missing) info = h('span', { class: 'muted' }, `月末の残高があと${missing}件`);
         else info = h('span', { class: 'ok-text' }, '確定できます');
-        return h('li', null, h('a', { class: 'month-row', href: `#/assets/month/${ym}` }, h('span', { class: 'month-name' }, `${formatMonth(ym)}末`), closeBadge(e.status), info, icon('right', 18)));
+        return h(
+          'li',
+          null,
+          h(
+            'a',
+            { class: 'month-row', href: `#/assets/month/${ym}` },
+            h('span', { class: 'month-name' }, `${formatMonth(ym)}末`),
+            closeBadge(e.status),
+            info,
+            icon('right', 18),
+          ),
+        );
       }),
     ),
   );
 }
 
 // ---------------------------------------------------------------------------
-// 口座の詳細
+// 口座の詳細（通帳の中身）
 
 export function renderAccount(id) {
   const state = app.state;
@@ -131,6 +202,10 @@ export function renderAccount(id) {
   const all = state.snapshots
     .filter((s) => s.accountId === a.id)
     .sort((x, y) => y.asOfDate.localeCompare(x.asOfDate) || y.recordedAt.localeCompare(x.recordedAt));
+  // 有効な実残高どうしの「前回の確認との差」（記録された事実の差。収入・節約の意味ではない）
+  const diffs = new Map();
+  const effActual = all.filter((s) => s.kind === 'actual' && !s.invalidatedAt && !idx.supersededBy.has(s.id)).reverse();
+  for (let i = 1; i < effActual.length; i++) diffs.set(effActual[i].id, effActual[i].amountYen - effActual[i - 1].amountYen);
   const ended = a.managedUntil && a.managedUntil <= today;
   const loan = a.type === 'loan' ? loanProgress(state, a, today) : null;
 
@@ -138,60 +213,135 @@ export function renderAccount(id) {
     'dl',
     { class: 'kv-list' },
     kv('種類', ACCOUNT_TYPES[a.type].label),
-    kv('管理期間', `${formatDateLong(a.managedFrom)} 〜 ${a.managedUntil ? `${formatDateLong(a.managedUntil)}（${a.endKind === 'zero' ? '解約・完済' : '管理終了'}）` : ''}`),
+    kv(
+      '管理期間',
+      `${formatDateLong(a.managedFrom)} 〜 ${a.managedUntil ? `${formatDateLong(a.managedUntil)}（${a.endKind === 'zero' ? '解約・完済' : '管理終了'}）` : ''}`,
+    ),
     kv('始まり', a.startKind === 'new' ? 'この日に新しく開設（それ以前は0円）' : '以前から持っていた'),
     a.type === 'loan' ? kv('当初の元金', a.initialPrincipalYen === null ? '不明（未入力）' : formatYen(a.initialPrincipalYen)) : null,
     a.note ? kv('メモ', a.note) : null,
   );
 
-  return h(
-    'div',
-    { class: 'page' },
-    pageTitle(a.name, { back: '#/assets', sub: `${ACCOUNT_TYPES[a.type].icon} ${ACCOUNT_TYPES[a.type].label}${a.archivedAt ? '（アーカイブ中）' : ''}` }),
-    card(
-      h('p', { class: 'mini-label' }, '最新の確認済み残高'),
-      latest ? h('p', { class: ['hero-num', 'small-hero'] }, formatYen(latest.amountYen)) : h('p', { class: 'hero-num small-hero muted' }, '未確認'),
-      latest ? h('p', { class: 'note-line' }, icon('calendar', 16), `${asOf(latest.asOfDate, today)}・記録 ${formatStamp(latest.recordedAt)}`) : null,
-      conflict ? h('p', { class: 'note-line warn' }, icon('alert', 16), '同じ日に複数の記録があります。どちらかを訂正か取り消ししてください。') : null,
-      loan && loan.ratio !== null
-        ? h('div', null, h('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': Math.round(loan.ratio * 100), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': '返済率' }, h('span', { style: { width: `${loan.ratio * 100}%` } })), h('p', { class: 'small muted' }, `返済済み ${formatYen(loan.repaid)}（${formatPercent(loan.ratio * 100)}）`))
-        : null,
-      loan && loan.ratio === null && loan.sinceFirst ? h('p', { class: 'small muted' }, `記録を始めた ${formatDateShort(loan.sinceFirst.from.asOfDate)} から ${formatYen(loan.sinceFirst.decrease)} 減少（当初の元金が不明なので返済率は出しません）`) : null,
-      h('div', { class: 'card-actions' }, ended ? null : button('残高を記録', () => openSnapshotSheet({ account: a }), { cls: 'btn primary', iconName: 'plus' })),
+  const head = card(
+    h(
+      'div',
+      { class: ['passbook', `acc-${a.type}`], style: { minHeight: '0' } },
+      h('span', { class: 'pb-kind' }, PB_KIND[a.type]),
+      h('span', { class: 'pb-emblem', 'aria-hidden': 'true' }, accIcon(a.type, 24)),
+      h('span', { class: 'pb-name' }, a.name),
+      h('span', { class: 'pb-amount' }, latest ? formatYen(latest.amountYen) : '未確認'),
     ),
-    card(cardHead('残高の履歴', { sub: '訂正・取り消しした記録も残ります' }), all.length ? h('ul', { class: 'snap-list' }, all.map((s) => snapRow(s, a, idx))) : h('p', { class: 'muted small' }, 'まだ記録がありません。')),
-    card(
-      cardHead('口座の情報'),
-      info,
-      h(
-        'div',
-        { class: 'card-actions wrap' },
-        button('編集', () => openAccountSheet({ account: a }), { cls: 'btn', iconName: 'edit' }),
-        button(a.archivedAt ? 'アーカイブから戻す' : 'アーカイブ', async () => {
+    latest
+      ? h(
+          'div',
+          { class: 'asof-row' },
+          postmark(latest.asOfDate),
+          h('p', null, `${asOf(latest.asOfDate, today)}の確認済み残高`, h('br'), h('span', { class: 'fine' }, `記録 ${formatStamp(latest.recordedAt)}`)),
+        )
+      : null,
+    conflict ? h('p', { class: 'note-line warn' }, icon('alert', 16), '同じ日に複数の記録があります。どちらかを訂正か取り消ししてください。') : null,
+    loan && loan.ratio !== null
+      ? h(
+          'div',
+          null,
+          h(
+            'div',
+            {
+              class: 'progress',
+              role: 'progressbar',
+              'aria-valuenow': Math.round(loan.ratio * 100),
+              'aria-valuemin': 0,
+              'aria-valuemax': 100,
+              'aria-label': '返済率',
+            },
+            h('span', { style: { width: `${loan.ratio * 100}%` } }),
+          ),
+          h('p', { class: 'small muted' }, `返済済み ${formatYen(loan.repaid)}（${formatPercent(loan.ratio * 100)}）`),
+        )
+      : null,
+    loan && loan.ratio === null && loan.sinceFirst
+      ? h(
+          'p',
+          { class: 'small muted' },
+          `記録を始めた ${formatDateShort(loan.sinceFirst.from.asOfDate)} から ${formatYen(loan.sinceFirst.decrease)} 減少（当初の元金が不明なので返済率は出しません）`,
+        )
+      : null,
+    h('div', { class: 'card-actions' }, ended ? null : button('残高を記録', () => openSnapshotSheet({ account: a }), { cls: 'btn primary', iconName: 'plus' })),
+  );
+
+  const history = card(
+    cardHead('通帳（残高の履歴）', { sub: '訂正・取り消しした記録も残ります。「前回との差」は確認した残高どうしの差で、収入や節約額ではありません。' }),
+    all.length
+      ? h(
+          'div',
+          { class: 'pb-page' },
+          h('div', { class: 'pb-head', 'aria-hidden': 'true' }, h('span', null, '年 月 日'), h('span', null, '区 分'), h('span', { class: 'right' }, '残 高')),
+          h(
+            'ul',
+            { class: 'snap-list' },
+            all.map((s) => snapRow(s, a, idx, diffs)),
+          ),
+        )
+      : h('p', { class: 'muted small' }, 'まだ記録がありません。'),
+  );
+
+  const infoCard = card(
+    cardHead('口座の情報'),
+    info,
+    h(
+      'div',
+      { class: 'card-actions wrap' },
+      button('編集', () => openAccountSheet({ account: a }), { cls: 'btn', iconName: 'edit' }),
+      button(
+        a.archivedAt ? 'アーカイブから戻す' : 'アーカイブ',
+        async () => {
           if (!a.archivedAt) {
-            const ok = await confirmDialog({ title: '一覧から隠しますか？', message: 'アーカイブは一覧の整理です。残高の履歴・月末確定・管理期間は変わりません。解約・完済した場合は「編集」から管理終了日を記録してください。', okLabel: 'アーカイブ' });
+            const ok = await confirmDialog({
+              title: '一覧から隠しますか？',
+              message:
+                'アーカイブは一覧の整理です。残高の履歴・月末確定・管理期間は変わりません。解約・完済した場合は「編集」から管理終了日を記録してください。',
+              okLabel: 'アーカイブ',
+            });
             if (!ok) return;
           }
           await app.save(A.setAccountArchived(state, a.id, !a.archivedAt, app.ctx()), { okMessage: a.archivedAt ? '一覧に戻しました' : 'アーカイブしました' });
-        }, { cls: 'btn ghost' }),
-        all.length === 0
-          ? button('削除', async () => {
-              const ok = await confirmDialog({ title: 'この口座を削除しますか？', message: '記録のない口座だけ削除できます。', okLabel: '削除する', danger: true });
+        },
+        { cls: 'btn ghost' },
+      ),
+      all.length === 0
+        ? button(
+            '削除',
+            async () => {
+              const ok = await confirmDialog({
+                title: 'この口座を削除しますか？',
+                message: '記録のない口座だけ削除できます。',
+                okLabel: '削除する',
+                danger: true,
+              });
               if (!ok) return;
               const res = A.deleteAccount(app.state, a.id);
               if (!res.ok) return confirmDialog({ title: '削除できません', message: res.message, okLabel: 'OK' });
               const saved = await app.save(res, { okMessage: '削除しました' });
               if (saved.ok) app.navigate('assets');
-            }, { cls: 'btn ghost danger-text' })
-          : null,
-      ),
+            },
+            { cls: 'btn ghost danger-text' },
+          )
+        : null,
     ),
+  );
+
+  return h(
+    'div',
+    { class: 'page' },
+    pageTitle(a.name, { back: '#/assets', kicker: ACCOUNT_TYPES[a.type].label, sub: a.archivedAt ? 'アーカイブ中' : undefined }),
+    cols([head, infoCard], [history], { ratio: 'wide-right' }),
   );
 }
 
-function snapRow(s, account, idx) {
+function snapRow(s, account, idx, diffs) {
   const effective = !s.invalidatedAt && !idx.supersededBy.has(s.id);
   const corrected = idx.supersededBy.has(s.id);
+  const diff = diffs.get(s.id);
   const badges = [
     s.kind === 'actual' ? badge('実残高', 'ok') : badge('推計', 'est'),
     s.monthEndVerified ? badge('月末の終了時点', 'info') : null,
@@ -201,15 +351,31 @@ function snapRow(s, account, idx) {
   ];
   const actions = [];
   if (effective) {
-    if (s.kind === 'actual' && !s.monthEndVerified && isLastDayOfMonth(s.asOfDate)) actions.push(button('月末値として確認', () => verifyAsMonthEnd(s), { cls: 'btn tiny' }));
-    actions.push(button('訂正', () => openSnapshotSheet({ account, correct: s }), { cls: 'btn tiny' }), button('取り消し', () => invalidateSnapshotFlow(s), { cls: 'btn tiny ghost' }));
+    if (s.kind === 'actual' && !s.monthEndVerified && isLastDayOfMonth(s.asOfDate))
+      actions.push(button('月末値として確認', () => verifyAsMonthEnd(s), { cls: 'btn tiny' }));
+    actions.push(
+      button('訂正', () => openSnapshotSheet({ account, correct: s }), { cls: 'btn tiny' }),
+      button('取り消し', () => invalidateSnapshotFlow(s), { cls: 'btn tiny ghost' }),
+    );
   }
   return h(
     'li',
     { class: ['snap', !effective && 'inactive'] },
-    h('div', { class: 'snap-top' }, h('span', { class: 'snap-date' }, formatDateLong(s.asOfDate)), h('span', { class: ['num', 'snap-amount', !effective && 'strike'] }, formatYen(s.amountYen))),
-    h('div', { class: 'snap-badges' }, badges),
-    h('p', { class: 'snap-meta' }, `記録 ${formatStamp(s.recordedAt)}`, s.invalidatedAt ? `・取り消し ${formatStamp(s.invalidatedAt)}${s.invalidReason ? `（${s.invalidReason}）` : ''}` : '', s.note ? `・${s.note}` : ''),
+    h('span', { class: 'snap-date' }, s.asOfDate.replaceAll('-', '.')),
+    h('span', { class: 'snap-mid' }, badges),
+    h(
+      'span',
+      { class: ['snap-amount', 'num', !effective && 'strike'] },
+      formatYen(s.amountYen),
+      diff !== undefined && effective ? h('span', { class: 'snap-diff' }, `前回との差 ${formatDelta(diff)}`) : null,
+    ),
+    h(
+      'p',
+      { class: 'snap-meta' },
+      `記録 ${formatStamp(s.recordedAt)}`,
+      s.invalidatedAt ? `・取り消し ${formatStamp(s.invalidatedAt)}${s.invalidReason ? `（${s.invalidReason}）` : ''}` : '',
+      s.note ? `・${s.note}` : '',
+    ),
     actions.length ? h('div', { class: 'snap-actions' }, actions) : null,
   );
 }
@@ -230,7 +396,7 @@ export function renderMonth(ym) {
     const a = i.account;
     let right;
     let detail = null;
-    if (i.adopted) right = yen(i.adopted.amountYen);
+    if (i.adopted) right = yen(i.adopted.amountYen, { cls: 'strong' });
     else {
       right = badge('不足', 'warn', 'alert');
       detail = h(
@@ -241,26 +407,40 @@ export function renderMonth(ym) {
           ? i.related.map((s) => button(`${formatYen(s.amountYen)} を月末の値として確認`, () => verifyAsMonthEnd(s), { cls: 'btn tiny' }))
           : i.problem === 'conflict'
             ? h('a', { class: 'btn tiny', href: `#/assets/account/${encodeURIComponent(a.id)}` }, '履歴で整理する')
-            : button(`${formatDateShort(end)}の残高を記録`, () => openSnapshotSheet({ account: a, monthEnd: ym }), { cls: 'btn tiny primary' }),
+            : button(`${formatDateShort(end)}の残高を記録`, () => openSnapshotSheet({ account: a, monthEnd: ym }), { cls: 'btn tiny' }),
       );
     }
-    return h('li', { class: 'me-item' }, h('div', { class: 'row between' }, h('a', { href: `#/assets/account/${encodeURIComponent(a.id)}` }, `${ACCOUNT_TYPES[a.type].icon} ${a.name}`), right), detail);
+    return h(
+      'li',
+      { class: ['me-item', i.adopted && 'done'] },
+      h('span', { class: 'me-check', 'aria-hidden': 'true' }, i.adopted ? '済' : ''),
+      h('a', { href: `#/assets/account/${encodeURIComponent(a.id)}` }, a.name),
+      right,
+      detail,
+    );
   });
+  const missingCount = ms.items.filter((i) => !i.adopted && i.problem !== 'conflict').length;
 
-  const confirmBtn = button(e.status === 'needs_review' ? 'いまの残高で確定し直す' : `${formatMonth(ym)}末を確定する`, async () => {
-    let reasonInput = null;
-    const ok = await confirmDialog({
-      title: `${formatMonth(ym)}末を確定しますか？`,
-      message: `総資産 ${formatYen(ms.totals.assets)}、奨学金 ${formatYen(ms.totals.loans)}、管理上の純資産 ${formatYen(ms.totals.net)} で確定します。使った残高記録と対象口座を固定して保存します。`,
-      okLabel: '確定する',
-      details: e.history.length ? h('div', null, (reasonInput = h('input', { class: 'text-input', type: 'text', placeholder: '確定し直す理由（任意）', 'aria-label': '理由' }))) : null,
-    });
-    if (!ok) return;
-    const res = A.confirmMonth(app.state, ym, reasonInput?.value ?? '', app.ctx());
-    if (!res.ok) return confirmDialog({ title: '確定できません', message: res.message, okLabel: 'OK' });
-    const saved = await app.save(res, { okMessage: `${formatMonth(ym)}末を確定しました` });
-    if (saved.ok) document.querySelector('.stamp-anim')?.classList.add('play');
-  }, { cls: 'btn primary wide big', iconName: 'stamp', disabled: !ms.canConfirm || undefined });
+  const confirmBtn = button(
+    e.status === 'needs_review' ? 'いまの残高で確定し直す' : `${formatMonth(ym)}末を確定する`,
+    async () => {
+      let reasonInput = null;
+      const ok = await confirmDialog({
+        title: `${formatMonth(ym)}末を確定しますか？`,
+        message: `総資産 ${formatYen(ms.totals.assets)}、奨学金 ${formatYen(ms.totals.loans)}、管理上の純資産 ${formatYen(ms.totals.net)} で確定します。使った残高記録と対象口座を固定して保存します。`,
+        okLabel: '判子を押す（確定）',
+        details: e.history.length
+          ? h('div', null, (reasonInput = h('input', { class: 'text-input', type: 'text', placeholder: '確定し直す理由（任意）', 'aria-label': '理由' })))
+          : null,
+      });
+      if (!ok) return;
+      const res = A.confirmMonth(app.state, ym, reasonInput?.value ?? '', app.ctx());
+      if (!res.ok) return confirmDialog({ title: '確定できません', message: res.message, okLabel: 'OK' });
+      const saved = await app.save(res, { okMessage: `${formatMonth(ym)}末を確定しました` });
+      if (saved.ok) playStamp();
+    },
+    { cls: 'btn primary wide big', iconName: 'stamp', disabled: !ms.canConfirm || undefined },
+  );
 
   let blockers = null;
   if (!ms.canConfirm) {
@@ -275,15 +455,39 @@ export function renderMonth(ym) {
     h(
       'div',
       { class: 'me-status' },
-      e.status === 'confirmed' ? h('div', { class: 'hanko', 'aria-hidden': 'true' }, h('span', null, '確定')) : null,
-      h('div', null, h('p', { class: 'mini-label' }, '状態'), h('p', { class: 'status-line' }, closeBadge(e.status), e.close ? h('span', { class: 'small muted' }, ` 第${e.close.revision}版・${formatStamp(e.close.createdAt)}`) : null)),
+      e.status === 'confirmed'
+        ? h('div', { class: 'hanko', 'aria-hidden': 'true' }, '確定')
+        : e.status === 'needs_review'
+          ? h('div', { class: 'hanko review', 'aria-hidden': 'true' }, '要確認')
+          : null,
+      h(
+        'div',
+        null,
+        h('p', { class: 'mini-label' }, '状態'),
+        h(
+          'p',
+          { class: 'status-line' },
+          closeBadge(e.status),
+          e.close ? h('span', { class: 'small muted' }, ` 第${e.close.revision}版・${formatStamp(e.close.createdAt)}`) : null,
+        ),
+      ),
     ),
     e.status === 'needs_review'
       ? h(
           'div',
           { class: 'warn-box' },
           h('p', null, '確定したあとで、次の変更がありました。確定した値は「現在の実績」としては使いません。'),
-          h('ul', null, e.reasons.map((r) => h('li', null, `${REVIEW_REASON_LABELS[r.type]}${r.accountId ? `：${state.accounts.find((x) => x.id === r.accountId)?.name ?? '（削除された口座）'}` : ''}`))),
+          h(
+            'ul',
+            null,
+            e.reasons.map((r) =>
+              h(
+                'li',
+                null,
+                `${REVIEW_REASON_LABELS[r.type]}${r.accountId ? `：${state.accounts.find((x) => x.id === r.accountId)?.name ?? '（削除された口座）'}` : ''}`,
+              ),
+            ),
+          ),
         )
       : null,
     e.close?.totals && e.status !== 'unconfirmed'
@@ -296,16 +500,28 @@ export function renderMonth(ym) {
         )
       : null,
     e.status === 'confirmed' ? comparison(report) : null,
-    h('div', { class: 'stamp-anim', 'aria-hidden': 'true' }, h('span', null, '確定')),
   );
 
   const itemsCard = card(
     cardHead(`${formatMonth(ym)}末の対象口座`, { sub: `${formatDateLong(end)} の終了時点。今日の値・前月の値・推計では補いません。` }),
     ms.items.length ? h('ul', { class: 'me-list' }, items) : h('p', { class: 'muted small' }, 'この月末に管理している口座はありません。'),
-    ms.complete && e.status !== 'confirmed'
-      ? h('dl', { class: 'kv-list' }, kv('総資産', yen(ms.totals.assets)), kv('奨学金', yen(ms.totals.loans)), kv('管理上の純資産', yen(ms.totals.net, { cls: 'strong' })))
+    missingCount && ms.ended
+      ? h(
+          'div',
+          { class: 'card-actions' },
+          button(`残りの${missingCount}件をまとめて記録`, () => openMonthEndBulkSheet(ym), { cls: 'btn wide', iconName: 'edit' }),
+        )
       : null,
-    e.status !== 'confirmed' ? h('div', { class: 'card-actions' }, blockers, confirmBtn) : null,
+    ms.complete && e.status !== 'confirmed'
+      ? h(
+          'dl',
+          { class: 'kv-list' },
+          kv('総資産', yen(ms.totals.assets)),
+          kv('奨学金', yen(ms.totals.loans)),
+          kv('管理上の純資産', yen(ms.totals.net, { cls: 'strong' })),
+        )
+      : null,
+    e.status !== 'confirmed' ? h('div', { class: 'card-actions', style: { flexDirection: 'column', alignItems: 'stretch' } }, blockers, confirmBtn) : null,
   );
 
   const history = e.history.length
@@ -317,36 +533,51 @@ export function renderMonth(ym) {
           h(
             'ol',
             { class: 'history-list', reversed: true },
-            [...e.history].reverse().map((c) =>
-              h(
-                'li',
-                null,
-                h('span', null, `第${c.revision}版 ${c.status === 'confirmed' ? '確定' : '取り消し'}`),
-                h('span', { class: 'small muted' }, ` ${formatStamp(c.createdAt)}`),
-                c.totals ? h('span', { class: 'num small' }, ` 純資産 ${formatYen(c.totals.net)}`) : null,
-                c.reason ? h('p', { class: 'small muted' }, `理由：${c.reason}`) : null,
+            [...e.history]
+              .reverse()
+              .map((c) =>
+                h(
+                  'li',
+                  null,
+                  h('span', null, `第${c.revision}版 ${c.status === 'confirmed' ? '確定' : '取り消し'}`),
+                  h('span', { class: 'small muted' }, ` ${formatStamp(c.createdAt)}`),
+                  c.totals ? h('span', { class: 'num small' }, ` 純資産 ${formatYen(c.totals.net)}`) : null,
+                  c.reason ? h('p', { class: 'small muted' }, `理由：${c.reason}`) : null,
+                ),
               ),
-            ),
           ),
           e.status !== 'unconfirmed'
-            ? button('確定を取り消す', async () => {
-                let reasonInput;
-                const ok = await confirmDialog({
-                  title: '確定を取り消しますか？',
-                  message: '未確定に戻します。確定の履歴は残ります。',
-                  okLabel: '取り消す',
-                  danger: true,
-                  details: h('div', null, (reasonInput = h('input', { class: 'text-input', type: 'text', placeholder: '理由（任意）', 'aria-label': '理由' }))),
-                });
-                if (!ok) return;
-                await app.save(A.cancelClose(app.state, ym, reasonInput.value, app.ctx()), { okMessage: '確定を取り消しました' });
-              }, { cls: 'btn ghost danger-text' })
+            ? button(
+                '確定を取り消す',
+                async () => {
+                  let reasonInput;
+                  const ok = await confirmDialog({
+                    title: '確定を取り消しますか？',
+                    message: '未確定に戻します。確定の履歴は残ります。',
+                    okLabel: '取り消す',
+                    danger: true,
+                    details: h(
+                      'div',
+                      null,
+                      (reasonInput = h('input', { class: 'text-input', type: 'text', placeholder: '理由（任意）', 'aria-label': '理由' })),
+                    ),
+                  });
+                  if (!ok) return;
+                  await app.save(A.cancelClose(app.state, ym, reasonInput.value, app.ctx()), { okMessage: '確定を取り消しました' });
+                },
+                { cls: 'btn ghost danger-text' },
+              )
             : null,
         ),
       )
     : null;
 
-  return h('div', { class: 'page' }, pageTitle(`${formatMonth(ym)}末`, { back: '#/assets', action: helpButton('月末の確定', HELP.monthEnd) }), statusCard, itemsCard, history);
+  return h(
+    'div',
+    { class: 'page' },
+    pageTitle(`${formatMonth(ym)}末`, { back: '#/assets', kicker: '月末チェック', action: helpButton('月末の確定', HELP.monthEnd) }),
+    cols([statusCard, history], [itemsCard]),
+  );
 }
 
 function comparison(report) {
@@ -354,7 +585,14 @@ function comparison(report) {
   const rows = [];
   if (p.available) {
     rows.push(kv('前月比（管理上の純資産）', deltaView(p.delta.net)), kv('総資産', deltaView(p.delta.assets)), kv('奨学金', deltaView(p.delta.loans)));
-    for (const n of p.notes ?? []) rows.push(h('p', { class: 'fine' }, n.type === 'opened' ? `「${n.account.name}」は期間中に新しく開設（開設前は0円として比較）` : `「${n.account.name}」は解約・完済で0円（管理終了）`));
+    for (const n of p.notes ?? [])
+      rows.push(
+        h(
+          'p',
+          { class: 'fine' },
+          n.type === 'opened' ? `「${n.account.name}」は期間中に新しく開設（開設前は0円として比較）` : `「${n.account.name}」は解約・完済で0円（管理終了）`,
+        ),
+      );
   } else {
     const reasons = (p.reasons ?? []).map((r) => COMPARE_REASON_LABELS[r.type] + (r.account ? `（${r.account.name}）` : ''));
     rows.push(kv('前月比', h('span', { class: 'muted' }, `未算出：${reasons.join('、') || '直前の月末と比べられません'}`)));
@@ -365,4 +603,3 @@ function comparison(report) {
   }
   return h('dl', { class: 'kv-list compare' }, rows, h('p', { class: 'fine' }, '増減は節約額や投資の利益とは限りません。'));
 }
-

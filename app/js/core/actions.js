@@ -7,17 +7,44 @@
 
 import { ACCOUNT_TYPES, CATEGORY_IDS, EVENT_KINDS } from './constants.js';
 import { isYen } from './money.js';
-import { isValidDate, isValidMonth, isLastDayOfMonth, monthOf } from './dates.js';
+import { isValidDate, isValidMonth, isLastDayOfMonth, monthOf, lastDayOfMonth } from './dates.js';
 import { effectiveSnapshotsOf, isEffectiveSnapshot } from './assets.js';
 import { buildCloseRecord, buildCancelRecord } from './closes.js';
 import { termsOf, termAt, nextRoomNo, occurrenceKey, extraOccurrenceKey, linkForEvent } from './subs.js';
 import { validateAccount, validateSnapshot, validateEvent, validateContract, validateTerm, validateLink, validateClose, validateSettings } from './validate.js';
 import { ID_PREFIX, shortId } from './ids.js';
+import { applyChanges } from './apply.js';
 
 const fail = (code, message, extra = {}) => ({ ok: false, code, message, ...extra });
 
 function changes() {
   return { add: {}, put: {}, del: {} };
+}
+
+/** 2つの変更を1つにまとめる（同じトランザクションで保存するため）。後の put・settings が優先 */
+export function mergeChanges(a, b) {
+  const out = changes();
+  for (const op of ['add', 'put', 'del']) {
+    for (const src of [a, b]) for (const [coll, list] of Object.entries(src[op] ?? {})) (out[op][coll] ??= []).push(...list);
+  }
+  if (a.settings) out.settings = a.settings;
+  if (b.settings) out.settings = b.settings;
+  return out;
+}
+
+/** 複数の操作を順に組み立て、1つの変更にまとめる。steps は (state) => 結果 の関数 */
+function chain(state, steps) {
+  let working = state;
+  let all = changes();
+  const results = [];
+  for (const step of steps) {
+    const res = step(working);
+    if (!res.ok) return { ...res, results };
+    all = mergeChanges(all, res.changes);
+    working = applyChanges(working, res.changes);
+    results.push(res);
+  }
+  return { ok: true, changes: all, results, state: working };
 }
 function addTo(ch, op, coll, rec) {
   (ch[op][coll] ??= []).push(rec);
@@ -96,7 +123,66 @@ export function deleteAccount(state, id) {
     state.events.some((e) => e.accountId === id || e.fromAccountId === id || e.toAccountId === id) ||
     state.closes.some((c) => c.accountScope.includes(id));
   if (used) return fail('in_use', 'この口座には記録があるため削除できません。一覧から隠すには「アーカイブ」を使ってください');
-  return { ok: true, changes: addTo(changes(), 'del', 'accounts', id) };
+  const ch = addTo(changes(), 'del', 'accounts', id);
+  // 「いつもの動き」からの参照を外す
+  const moves = state.settings.quickMoves ?? [];
+  if (moves.some((m) => m.fromAccountId === id || m.toAccountId === id)) {
+    ch.settings = {
+      ...state.settings,
+      quickMoves: moves.map((m) => ({
+        ...m,
+        fromAccountId: m.fromAccountId === id ? null : m.fromAccountId,
+        toAccountId: m.toAccountId === id ? null : m.toAccountId,
+      })),
+    };
+  }
+  return { ok: true, changes: ch };
+}
+
+/**
+ * はじめの準備：よくある組み合わせ（給与の口座・貯金の口座・NISA・奨学金など）をまとめて登録する。
+ * input: { managedFrom, accounts: [{ role, name, type, initialPrincipalYen }], quickMoves: boolean }
+ * quickMoves が true なら、毎月の振替・積立・返済を「いつもの動き」として用意する（金額は空欄）。
+ */
+export function setupAccounts(state, input, ctx) {
+  const list = (input.accounts ?? []).filter((a) => a && trimText(a.name, 60));
+  if (list.length === 0) return fail('invalid', '登録する口座を1つ以上選んでください');
+  const res = chain(
+    state,
+    list.map(
+      (a) => (s) =>
+        createAccount(
+          s,
+          { name: a.name, type: a.type, managedFrom: input.managedFrom, startKind: 'existing', initialPrincipalYen: a.initialPrincipalYen ?? null, note: '' },
+          ctx,
+        ),
+    ),
+  );
+  if (!res.ok) return res;
+  const byRole = {};
+  list.forEach((a, i) => {
+    if (a.role) byRole[a.role] = res.results[i].record;
+  });
+  let ch = res.changes;
+  if (input.quickMoves) {
+    const moves = [];
+    const salary = byRole.salary;
+    const savings = byRole.savings;
+    const nisa = byRole.nisa;
+    const loan = byRole.loan;
+    if (salary && savings) moves.push({ label: '貯金の口座へ', kind: 'transfer', fromAccountId: salary.id, toAccountId: savings.id });
+    if (nisa && (salary || savings)) moves.push({ label: 'NISAの積立', kind: 'transfer', fromAccountId: (salary ?? savings).id, toAccountId: nisa.id });
+    if (loan) moves.push({ label: '奨学金の返済（引き落とし）', kind: 'repayment', fromAccountId: (savings ?? salary)?.id ?? null, toAccountId: loan.id });
+    if (salary) moves.push({ label: '給与', kind: 'income', fromAccountId: null, toAccountId: salary.id });
+    let settings = res.state.settings;
+    for (const m of moves) {
+      const r = addQuickMove({ ...res.state, settings }, { ...m, amountYen: null }, ctx);
+      if (!r.ok) return r;
+      settings = r.settings;
+    }
+    ch = { ...ch, settings };
+  }
+  return { ok: true, changes: ch, records: res.results.map((r) => r.record) };
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +262,36 @@ export function confirmMonth(state, ym, reason, ctx) {
   return guard(validateClose(res.record)) ?? { ok: true, changes: addTo(changes(), 'add', 'closes', res.record), record: res.record };
 }
 
+/**
+ * 月末の残高をまとめて記録する（基準日＝月末、実測、月末の終了時点として確認）。
+ * 「〇月末（終了時点）の残高として記録」という明示の操作で呼ぶ。confirm が true ならそのまま確定まで同じ保存で行う。
+ * entries: [{ accountId, amountYen }]
+ */
+export function recordMonthEndBatch(state, ym, entries, { confirm = false, reason = '' } = {}, ctx) {
+  if (!isValidMonth(ym)) return fail('invalid', '月が正しくありません');
+  const end = lastDayOfMonth(ym);
+  if (end > ctx.today) return fail('not_ended', 'まだ月末を迎えていません');
+  if (!entries.length && !confirm) return fail('invalid', '記録する残高がありません');
+  const steps = entries.map((e) => (s) => {
+    const r = addSnapshot(
+      s,
+      { accountId: e.accountId, amountYen: e.amountYen, asOfDate: end, kind: 'actual', monthEndVerified: true, note: e.note ?? '' },
+      ctx,
+    );
+    if (!r.ok) {
+      const name = s.accounts.find((a) => a.id === e.accountId)?.name ?? '';
+      return {
+        ...r,
+        message: `${name}：${r.code === 'same_day_exists' ? 'この月末の残高はすでに記録されています（訂正は口座の履歴から）' : r.message}`,
+        accountId: e.accountId,
+      };
+    }
+    return r;
+  });
+  if (confirm) steps.push((s) => confirmMonth(s, ym, reason, ctx));
+  return chain(state, steps);
+}
+
 export function cancelClose(state, ym, reason, ctx) {
   const res = buildCancelRecord(state, ym, { id: ctx.newId(ID_PREFIX.closes), now: ctx.now, reason: trimText(reason, 500) });
   if (!res.ok) return fail('invalid', '取り消す確定がありません');
@@ -202,7 +318,7 @@ function buildEventFields(state, input, ctx) {
   const date = normalizeDate(input, ctx);
   if (date.error) return date;
   const accById = new Map(state.accounts.map((a) => [a.id, a]));
-  const acc = (id) => (id ? accById.get(id) ?? null : null);
+  const acc = (id) => (id ? (accById.get(id) ?? null) : null);
   const f = {
     kind,
     amountYen: input.amountYen,
@@ -490,7 +606,7 @@ export function confirmPayment(state, input, ctx) {
       amountYen: input.amountYen,
       datePrecision: input.datePrecision,
       occurredOn: input.occurredOn,
-      yearMonth: input.datePrecision === 'month' ? input.yearMonth ?? input.ym : undefined,
+      yearMonth: input.datePrecision === 'month' ? (input.yearMonth ?? input.ym) : undefined,
       memo: input.memo ?? contract.displayName,
       paymentMethod: input.paymentMethod,
       accountId: input.accountId,
@@ -558,6 +674,46 @@ export function removePayment(state, key, ctx) {
   const ev = link.moneyEventId ? state.events.find((e) => e.id === link.moneyEventId && !e.deletedAt) : null;
   if (ev) addTo(ch, 'put', 'events', { ...ev, deletedAt: ctx.now, updatedAt: ctx.now });
   return { ok: true, changes: ch };
+}
+
+// ---------------------------------------------------------------------------
+// いつもの動き（毎月の振替・積立・返済などのひな形。記録するときに中身を確認して使う）
+
+export const QUICK_MOVE_LIMIT = 20;
+
+export function addQuickMove(state, input, ctx) {
+  const moves = state.settings.quickMoves ?? [];
+  if (moves.length >= QUICK_MOVE_LIMIT) return fail('invalid', `いつもの動きは${QUICK_MOVE_LIMIT}件までです`);
+  const label = trimText(input.label, 30);
+  if (!label) return fail('invalid', '名前を入力してください');
+  if (!['income', 'transfer', 'repayment', 'card_payment'].includes(input.kind)) return fail('invalid', '種類が正しくありません');
+  if (input.amountYen !== null && input.amountYen !== undefined && (!isYen(input.amountYen) || input.amountYen <= 0))
+    return fail('invalid', '金額が正しくありません');
+  const accIds = new Set(state.accounts.map((a) => a.id));
+  for (const k of ['fromAccountId', 'toAccountId']) if (input[k] && !accIds.has(input[k])) return fail('invalid', '口座が見つかりません');
+  const move = {
+    id: ctx.newId('move'),
+    label,
+    kind: input.kind,
+    amountYen: input.amountYen ?? null,
+    fromAccountId: input.fromAccountId ?? null,
+    toAccountId: input.toAccountId ?? null,
+  };
+  const settings = { ...state.settings, quickMoves: [...moves, move] };
+  const err = guard(validateSettings(settings));
+  if (err) return err;
+  const ch = changes();
+  ch.settings = settings;
+  return { ok: true, changes: ch, settings, record: move };
+}
+
+export function removeQuickMove(state, id) {
+  const moves = state.settings.quickMoves ?? [];
+  if (!moves.some((m) => m.id === id)) return fail('not_found', '見つかりません');
+  const settings = { ...state.settings, quickMoves: moves.filter((m) => m.id !== id) };
+  const ch = changes();
+  ch.settings = settings;
+  return { ok: true, changes: ch, settings };
 }
 
 // ---------------------------------------------------------------------------

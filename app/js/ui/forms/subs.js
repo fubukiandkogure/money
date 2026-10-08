@@ -54,14 +54,21 @@ export function openContractSheet() {
         },
         { label: '状態' },
       );
-      const freqSel = segmented(Object.entries(FREQUENCIES).map(([k, v]) => [k, v.label]), frequency, (v) => (frequency = v), { label: '支払の周期' });
+      const freqSel = segmented(
+        Object.entries(FREQUENCIES).map(([k, v]) => [k, v.label]),
+        frequency,
+        (v) => (frequency = v),
+        { label: '支払の周期' },
+      );
       const price = priceField('料金', 980);
       const start = dateInput({ value: `${today.slice(0, 7)}-01`, today, quick: false });
       const due = dateInput({ value: '', today, quick: false, label: '次回の支払予定日' });
       const trialEnd = dateInput({ value: '', today, quick: false, label: '無料期間の終了日' });
       const trialBox = h('div', { hidden: true }, field('無料期間の終了日（分かれば）', trialEnd.el));
       const priceLabel = price.el.querySelector('.field-label');
-      const dueBox = field('次回の支払予定日（任意）', due.el, { hint: '分かれば、毎月（年払いなら毎年）その日を支払の候補日として出します。候補は実績ではありません。' });
+      const dueBox = field('次回の支払予定日（任意）', due.el, {
+        hint: '分かれば、毎月（年払いなら毎年）その日を支払の候補日として出します。候補は実績ではありません。',
+      });
       const sync = () => {
         trialBox.hidden = status !== 'trial';
         dueBox.hidden = status === 'trial';
@@ -97,7 +104,9 @@ export function openContractSheet() {
           err.show(res.message);
           return;
         }
-        const saved = await app.save(res, { okMessage: `${res.record.roomNo}号室に「${res.record.displayName}」が${status === 'trial' ? '内見に来ました' : '入居しました'}` });
+        const saved = await app.save(res, {
+          okMessage: `${res.record.roomNo}号室に「${res.record.displayName}」が${status === 'trial' ? '内見に来ました' : '入居しました'}`,
+        });
         if (!saved.ok) {
           err.show(`${saved.message}。入力はそのまま残っています。`);
           return;
@@ -112,7 +121,9 @@ export function openContractSheet() {
         field('状態', statusSel.el),
         price.el,
         field('支払の周期', freqSel.el),
-        field('いつから（この条件で）', start.el, { hint: '以前から使っている場合は、分かる範囲の日付で大丈夫です（今月1日のままでも構いません）。この日より前の月には支払の候補を出しません。' }),
+        field('いつから（この条件で）', start.el, {
+          hint: '以前から使っている場合は、分かる範囲の日付で大丈夫です（今月1日のままでも構いません）。この日より前の月には支払の候補を出しません。',
+        }),
         dueBox,
         trialBox,
         field('メモ', note, { id: note.id }),
@@ -137,7 +148,14 @@ export function openContractEditSheet(contract) {
         if (!saved.ok) return err.show(saved.message);
         sheet.close();
       });
-      return h('form', { class: 'stack', onsubmit: save.run, novalidate: true }, field('サービス名', name, { id: name.id }), field('メモ', note, { id: note.id }), err.el, h('div', { class: 'btn-row' }, save.el));
+      return h(
+        'form',
+        { class: 'stack', onsubmit: save.run, novalidate: true },
+        field('サービス名', name, { id: name.id }),
+        field('メモ', note, { id: note.id }),
+        err.el,
+        h('div', { class: 'btn-row' }, save.el),
+      );
     },
   });
 }
@@ -165,16 +183,27 @@ export function openTermsSheet(contract, mode) {
       if (mode === 'end') {
         cancelled = dateInput({ value: today, today, quick: false });
         parts.push(
-          h('p', { class: 'note' }, '解約の手続きをした日と、実際に利用・課金が終わる日（退去日）は分けて記録します。退去日までは今の見込みのまま、退去日から見込みが0になります。'),
+          h(
+            'p',
+            { class: 'note' },
+            '解約の手続きをした日と、実際に利用・課金が終わる日（退去日）は分けて記録します。退去日までは今の見込みのまま、退去日から見込みが0になります。',
+          ),
           field('解約の手続きをした日', cancelled.el),
           field('退去日（利用・課金が終わる日）', eff.el, { hint: 'この日から終了として扱います。未来の日付なら「退去予定」になります。' }),
         );
       } else {
         price = priceField(mode === 'start_paid' ? '入居後の料金' : '新しい料金', cur.priceYen);
-        const freqSel = segmented(Object.entries(FREQUENCIES).map(([k, v]) => [k, v.label]), frequency, (v) => (frequency = v), { label: '支払の周期' });
+        const freqSel = segmented(
+          Object.entries(FREQUENCIES).map(([k, v]) => [k, v.label]),
+          frequency,
+          (v) => (frequency = v),
+          { label: '支払の周期' },
+        );
         due = dateInput({ value: '', today, quick: false });
         parts.push(
-          mode === 'change' ? h('p', { class: 'note' }, '適用する日以降の見込みだけが変わります。過去の支払記録の金額は変わりません。') : h('p', { class: 'note' }, '内見（無料体験）から有料の利用に切り替えます。自動では切り替わりません。'),
+          mode === 'change'
+            ? h('p', { class: 'note' }, '適用する日以降の見込みだけが変わります。過去の支払記録の金額は変わりません。')
+            : h('p', { class: 'note' }, '内見（無料体験）から有料の利用に切り替えます。自動では切り替わりません。'),
           price.el,
           field('支払の周期', freqSel.el),
           field(mode === 'start_paid' ? '有料になる日' : '適用する日', eff.el),
@@ -199,7 +228,8 @@ export function openTermsSheet(contract, mode) {
         }
         const res = A.changeTerms(app.state, contract.id, input, app.ctx());
         if (!res.ok) return err.show(res.message);
-        const msg = mode === 'end' ? (input.effectiveOn > today ? `${formatDateShort(input.effectiveOn)} に退去予定です` : '退去しました') : '条件を記録しました';
+        const msg =
+          mode === 'end' ? (input.effectiveOn > today ? `${formatDateShort(input.effectiveOn)} に退去予定です` : '退去しました') : '条件を記録しました';
         const saved = await app.save(res, { okMessage: msg });
         if (!saved.ok) return err.show(`${saved.message}。入力はそのまま残っています。`);
         sheet.close();
@@ -236,12 +266,19 @@ export function openPaymentSheet({ row, contract, ym, extra = false }) {
       );
       // 新しく記録
       const amount = amountInput({ value: expected, autofocus: true });
-      const amountField = field('支払った金額', amount.el, { id: amount.id, hint: expected === null ? '料金が分からない契約です。実際に支払った金額を入力してください。' : '予定の金額です。実際と違えば直してください。' });
+      const amountField = field('支払った金額', amount.el, {
+        id: amount.id,
+        hint: expected === null ? '料金が分からない契約です。実際に支払った金額を入力してください。' : '予定の金額です。実際と違えば直してください。',
+      });
       let precision = 'day';
-      const initDate = dueOn && dueOn <= today ? dueOn : ym === today.slice(0, 7) ? today : dueOn ?? `${ym}-01`;
+      const initDate = dueOn && dueOn <= today ? dueOn : ym === today.slice(0, 7) ? today : (dueOn ?? `${ym}-01`);
       const date = dateInput({ value: initDate, today });
       const dayBox = h('div', null, date.el);
-      const monthNote = h('p', { class: 'note', hidden: true }, `日付不明（${formatMonth(ym)}）として記録します。月の合計には入り、日別・週別には配分しません。`);
+      const monthNote = h(
+        'p',
+        { class: 'note', hidden: true },
+        `日付不明（${formatMonth(ym)}）として記録します。月の合計には入り、日別・週別には配分しません。`,
+      );
       const unknownDate = checkbox('支払った日が分からない（月だけ分かる）', false);
       unknownDate.input.addEventListener('change', () => {
         precision = unknownDate.get() ? 'month' : 'day';
@@ -250,7 +287,11 @@ export function openPaymentSheet({ row, contract, ym, extra = false }) {
       });
       const pm = select(Object.entries(PAYMENT_METHODS), 'card', { emptyLabel: '指定しない', label: '支払方法' });
       const accounts = sortAccounts(app.state.accounts.filter((a) => a.type !== 'loan' && !a.archivedAt));
-      const acc = select(accounts.map((a) => [a.id, a.name]), null, { emptyLabel: '指定しない', label: '口座' });
+      const acc = select(
+        accounts.map((a) => [a.id, a.name]),
+        null,
+        { emptyLabel: '指定しない', label: '口座' },
+      );
       const err = formError();
       const save = saveButton('支払を記録', async () => {
         err.clear();
@@ -289,7 +330,13 @@ export function openPaymentSheet({ row, contract, ym, extra = false }) {
         amountField,
         field('支払った日', h('div', null, dayBox, monthNote)),
         unknownDate.el,
-        h('details', { class: 'more' }, h('summary', null, 'くわしく（支払方法・口座）'), field('支払方法', pm, { id: pm.id }), field('口座', acc, { id: acc.id })),
+        h(
+          'details',
+          { class: 'more' },
+          h('summary', null, 'くわしく（支払方法・口座）'),
+          field('支払方法', pm, { id: pm.id }),
+          field('口座', acc, { id: acc.id }),
+        ),
         h('p', { class: 'field-hint' }, 'カテゴリー「サブスク」の支出として1件だけ記録されます。'),
         err.el,
         h('div', { class: 'btn-row' }, save.el),
@@ -300,13 +347,20 @@ export function openPaymentSheet({ row, contract, ym, extra = false }) {
       const months = [addMonths(ym, -1), ym, addMonths(ym, 1)];
       const candidates = app.state.events
         .filter((e) => isExpense(e) && months.includes(e.yearMonth) && !linkForEvent(app.state, e.id))
-        .sort((a, b) => Math.abs(a.amountYen - (expected ?? a.amountYen)) - Math.abs(b.amountYen - (expected ?? b.amountYen)) || sortKey(b).localeCompare(sortKey(a)));
+        .sort(
+          (a, b) =>
+            Math.abs(a.amountYen - (expected ?? a.amountYen)) - Math.abs(b.amountYen - (expected ?? b.amountYen)) || sortKey(b).localeCompare(sortKey(a)),
+        );
       const setCat = checkbox('カテゴリーを「サブスク」に変える', true);
       if (candidates.length === 0) {
         linkBox.append(h('p', { class: 'empty' }, `${formatMonth(months[0])}〜${formatMonth(months[2])}に、結び付けられる支出がありません。`));
       } else {
         linkBox.append(
-          h('p', { class: 'note' }, '普通の支出として記録済みの支払を選ぶと、その1件をこの支払として扱います（新しい支出は増えません）。金額や日付が一致しても自動では結び付けません。'),
+          h(
+            'p',
+            { class: 'note' },
+            '普通の支出として記録済みの支払を選ぶと、その1件をこの支払として扱います（新しい支出は増えません）。金額や日付が一致しても自動では結び付けません。',
+          ),
           setCat.el,
           h(
             'ul',
@@ -371,7 +425,11 @@ export async function undoPaymentFlow(row) {
         h(
           'div',
           { class: 'stack' },
-          h('p', { class: 'dialog-message' }, `${row.contract.displayName}：${formatYen(row.event.amountYen)}（${row.event.occurredOn ? formatDateLong(row.event.occurredOn) : '日付不明'}）`),
+          h(
+            'p',
+            { class: 'dialog-message' },
+            `${row.contract.displayName}：${formatYen(row.event.amountYen)}（${row.event.occurredOn ? formatDateLong(row.event.occurredOn) : '日付不明'}）`,
+          ),
           h(
             'button',
             {
@@ -414,4 +472,3 @@ export async function deleteTermFlow(term) {
   if (!ok) return;
   await app.save(A.deleteTerm(app.state, term.id), { okMessage: '削除しました' });
 }
-

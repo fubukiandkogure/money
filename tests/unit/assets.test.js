@@ -117,7 +117,10 @@ test('A07: 未入力は欠測、実際の0円は有効な実残高', () => {
   const b = w.account('架空銀行B', 'bank');
   w.balance(b, '2026-09-30', 0);
   const ov = currentOverview(w.state, w.today);
-  assert.deepEqual(ov.missing.map((x) => x.id), [a.id]);
+  assert.deepEqual(
+    ov.missing.map((x) => x.id),
+    [a.id],
+  );
   assert.equal(ov.complete, false);
   assert.equal(ov.partial, true);
   assert.equal(ov.rows.find((r) => r.account.id === b.id).latest.amountYen, 0);
@@ -140,11 +143,20 @@ test('A08: 確定に使った残高を訂正・無効化 → 履歴が残り、�
   assert.equal(monthReport(w.state, '2026-09', w.today).prevMonthComparison.delta.net, 70_000);
 
   // 訂正
-  const fixed = w.run(A.addSnapshot(w.state, { accountId: bank.id, asOfDate: '2026-09-30', amountYen: 240_000, kind: 'actual', monthEndVerified: true, revisionOf: s9.id }, w.ctx())).record;
+  const fixed = w.run(
+    A.addSnapshot(
+      w.state,
+      { accountId: bank.id, asOfDate: '2026-09-30', amountYen: 240_000, kind: 'actual', monthEndVerified: true, revisionOf: s9.id },
+      w.ctx(),
+    ),
+  ).record;
   const e = effectiveClose(w.state, '2026-09', w.today);
   assert.equal(e.status, 'needs_review');
   assert.equal(e.reasons[0].type, 'snapshot_changed');
-  assert.ok(w.state.snapshots.some((s) => s.id === s9.id), '旧記録は残る');
+  assert.ok(
+    w.state.snapshots.some((s) => s.id === s9.id),
+    '旧記録は残る',
+  );
   // 要再確認の月とは比較しない（古い確定値を有効な実績として使い続けない）
   assert.equal(monthReport(w.state, '2026-09', w.today).prevMonthComparison.available, false);
 
@@ -220,7 +232,11 @@ test('A10: 当初元金が不明なら返済額・返済率を作らない。分
   assert.equal(p.sinceFirst.from.asOfDate, '2026-08-31');
 
   w.run(A.updateAccount(w.state, loan.id, { initialPrincipalYen: 400_000 }, w.ctx()));
-  const p2 = loanProgress(w.state, w.state.accounts.find((a) => a.id === loan.id), w.today);
+  const p2 = loanProgress(
+    w.state,
+    w.state.accounts.find((a) => a.id === loan.id),
+    w.today,
+  );
   assert.equal(p2.repaid, 120_000);
   assert.equal(p2.ratio, 0.3);
 
@@ -290,7 +306,13 @@ test('管理開始日より前の残高は確認してから開始日を広げ�
   const a = w.account('架空銀行', 'bank', { managedFrom: '2026-10-01' });
   const r = A.addSnapshot(w.state, { accountId: a.id, asOfDate: '2026-09-30', amountYen: 1000, kind: 'actual', monthEndVerified: true }, w.ctx());
   assert.equal(r.code, 'before_managed_from');
-  const r2 = w.run(A.addSnapshot(w.state, { accountId: a.id, asOfDate: '2026-09-30', amountYen: 1000, kind: 'actual', monthEndVerified: true, extendManagedFrom: true }, w.ctx()));
+  const r2 = w.run(
+    A.addSnapshot(
+      w.state,
+      { accountId: a.id, asOfDate: '2026-09-30', amountYen: 1000, kind: 'actual', monthEndVerified: true, extendManagedFrom: true },
+      w.ctx(),
+    ),
+  );
   assert.equal(r2.accountChanged.managedFrom, '2026-09-30');
   assert.equal(monthEndStatus(w.state, '2026-09', w.today).canConfirm, true);
 });

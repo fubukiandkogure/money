@@ -103,7 +103,8 @@ export class Store {
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => {
         const e = req.error;
-        if (e?.name === 'VersionError') reject(new LoadError('too_new', 'このデータは新しい版のアプリで更新されています。ページを再読み込みして最新版を使ってください'));
+        if (e?.name === 'VersionError')
+          reject(new LoadError('too_new', 'このデータは新しい版のアプリで更新されています。ページを再読み込みして最新版を使ってください'));
         else reject(new LoadError('open_failed', `データベースを開けませんでした（${e?.name ?? '不明'}）`));
       };
       req.onblocked = () => reject(new LoadError('blocked', '別のタブで古い版のアプリが開いています。ほかのタブを閉じてから再読み込みしてください'));
@@ -204,7 +205,10 @@ export class Store {
     } catch (e) {
       if (stale) {
         await this.reloadFromDb('stale');
-        throw new SaveError('stale', '別のタブ（または別の画面）でデータが更新されていたため、保存しませんでした。最新の内容を読み込んだので、もう一度保存してください');
+        throw new SaveError(
+          'stale',
+          '別のタブ（または別の画面）でデータが更新されていたため、保存しませんでした。最新の内容を読み込んだので、もう一度保存してください',
+        );
       }
       throw describeSaveError(thrown ?? e);
     }
