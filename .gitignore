@@ -1,0 +1,7 @@
+node_modules/
+test-results/
+*.log
+.DS_Store
+# 個人のバックアップを誤ってコミットしないため
+*backup*.json
+futokoro-machi-*.json
