@@ -366,13 +366,17 @@ export class Store {
   }
 }
 
-/** 読み込みに失敗した状態でも、DB を開かずに生データを取り出す（救出用） */
+/** 読み込みに失敗した状態でも、検証せずに DB を開く（救出・バックアップからの置換復元用） */
 export async function openForRescue(dbName) {
   const s = new Store({ dbName });
   s.db = await new Promise((resolve, reject) => {
-    const req = indexedDB.open(dbName);
+    const req = indexedDB.open(dbName, DB_VERSION);
+    req.onupgradeneeded = (ev) => upgrade(req.result, req.transaction, ev.oldVersion);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+  const raw = await s.readRaw();
+  s.revision = raw.meta.state?.revision ?? 0;
+  s.device = raw.meta.device ?? {};
   return s;
 }

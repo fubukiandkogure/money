@@ -100,8 +100,8 @@ function monthCard(today) {
       ),
     );
   }
-  if (!latest || latest.ym !== lastEnded) {
-    const ms = monthEndStatus(state, lastEnded, today);
+  const ms = monthEndStatus(state, lastEnded, today);
+  if ((!latest || latest.ym !== lastEnded) && ms.items.length > 0) {
     const missing = ms.items.filter((i) => !i.adopted).length;
     rows.push(
       h(
@@ -112,6 +112,9 @@ function monthCard(today) {
         icon('right', 18),
       ),
     );
+  }
+  if (rows.length === 0) {
+    rows.push(h('p', { class: 'small muted' }, `${formatMonth(monthOf(today))}末の残高がそろったら、ここで月末を確定できます。`));
   }
   return card(cardHead('月末の記録', { action: helpButton('月末の確定', HELP.monthEnd) }), rows, h('p', { class: 'fine' }, '増減は確定した月末どうしの比較です。節約額や投資の利益とは限りません。'));
 }

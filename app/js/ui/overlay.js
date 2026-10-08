@@ -205,6 +205,8 @@ export function toast(message, { kind = 'ok', action, duration } = {}) {
     );
   }
   el.append(h('button', { class: 'toast-close', type: 'button', 'aria-label': '閉じる', onclick: dismiss }, icon('close', 16)));
+  // ふつうの通知は最新の1件だけ（エラーは閉じるまで残す）
+  for (const old of host().querySelectorAll('.toast:not(.toast-error)')) old.remove();
   host().append(el);
   const ms = duration ?? (kind === 'error' ? 0 : action ? 7000 : 3500);
   if (ms > 0) setTimeout(dismiss, ms);

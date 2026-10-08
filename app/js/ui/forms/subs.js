@@ -56,7 +56,7 @@ export function openContractSheet() {
       );
       const freqSel = segmented(Object.entries(FREQUENCIES).map(([k, v]) => [k, v.label]), frequency, (v) => (frequency = v), { label: '支払の周期' });
       const price = priceField('料金', 980);
-      const start = dateInput({ value: today, today, quick: false });
+      const start = dateInput({ value: `${today.slice(0, 7)}-01`, today, quick: false });
       const due = dateInput({ value: '', today, quick: false, label: '次回の支払予定日' });
       const trialEnd = dateInput({ value: '', today, quick: false, label: '無料期間の終了日' });
       const trialBox = h('div', { hidden: true }, field('無料期間の終了日（分かれば）', trialEnd.el));
@@ -112,7 +112,7 @@ export function openContractSheet() {
         field('状態', statusSel.el),
         price.el,
         field('支払の周期', freqSel.el),
-        field('利用を始めた日', start.el),
+        field('いつから（この条件で）', start.el, { hint: '以前から使っている場合は、分かる範囲の日付で大丈夫です（今月1日のままでも構いません）。この日より前の月には支払の候補を出しません。' }),
         dueBox,
         trialBox,
         field('メモ', note, { id: note.id }),

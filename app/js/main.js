@@ -3,10 +3,11 @@ import { app } from './app.js';
 import { h, replace } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { logo } from './ui/art.js';
-import { toast, sheetsOpen } from './ui/overlay.js';
+import { toast, sheetsOpen, confirmDialog } from './ui/overlay.js';
 import { Store, LoadError, openForRescue } from './data/store.js';
 import { APP_ID, APP_NAME, DB_NAME, DEMO_DB_NAME, SCHEMA_VERSION } from './core/constants.js';
-import { nowStampJST } from './core/dates.js';
+import { nowStampJST, formatStamp } from './core/dates.js';
+import { parseBackup } from './core/backup.js';
 import { renderHome } from './views/home.js';
 import { renderAssets, renderAccount, renderMonth } from './views/assets.js';
 import { renderRecords } from './views/records.js';
@@ -116,11 +117,47 @@ function applyTheme(theme) {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#161b26' : '#22406b');
 }
 
+/** 読み込みエラーの画面から、検証済みのバックアップで置き換える（壊れたデータを直す手段） */
+function rescueRestoreBox() {
+  const status = h('div', { role: 'status' });
+  const input = h('input', { type: 'file', accept: '.json,application/json', class: 'file-input', 'aria-label': 'バックアップのファイルを選ぶ' });
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const parsed = parseBackup(await file.text());
+    if (!parsed.ok) {
+      status.replaceChildren(h('div', { class: 'error-box' }, h('p', null, '復元できないファイルです。何も変更していません。'), h('ul', null, parsed.errors.slice(0, 6).map((e) => h('li', null, e)))));
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'バックアップで置き換えますか？',
+      message: `${formatStamp(parsed.backup.exportedAt)} に書き出したバックアップで、この端末のデータ（読み込めなかったもの）をすべて置き換えます。必要なら先に「中身をそのまま書き出す」で保存してください。`,
+      okLabel: '置き換えて復元',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const s = await openForRescue(app.demo ? DEMO_DB_NAME : DB_NAME);
+      await s.replaceAll(parsed.data, { exportedAt: parsed.backup.exportedAt });
+      location.reload();
+    } catch (e) {
+      status.replaceChildren(h('div', { class: 'error-box' }, h('p', null, `置き換えできませんでした（${e.message}）。元のデータはそのままです。`)));
+    }
+  });
+  return h(
+    'div',
+    { class: 'stack tight' },
+    h('p', { class: 'small' }, '端末の外に保管したバックアップ（JSON）があれば、それで置き換えて使い続けられます。ファイルは中身を確かめてから使います。'),
+    h('label', { class: 'btn' }, icon('upload', 18), 'バックアップから復元…', input),
+    status,
+  );
+}
+
 function showLoadError(err) {
   const details = err instanceof LoadError ? err.details : [];
   const box = h(
-    'div',
-    { class: 'page' },
+    'main',
+    { class: 'main page' },
     h(
       'div',
       { class: 'card error-box', role: 'alert' },
@@ -153,7 +190,7 @@ function showLoadError(err) {
             )
           : null,
       ),
-      h('p', { class: 'fine' }, '端末の外に保管したバックアップがあれば、問題を直したあとで「設定」から復元できます。'),
+      err.kind === 'corrupt' ? rescueRestoreBox() : h('p', { class: 'fine' }, 'ページを再読み込みしても直らない場合は、ブラウザを最新にしてからもう一度開いてください。'),
     ),
   );
   replace(document.getElementById('app'), box);

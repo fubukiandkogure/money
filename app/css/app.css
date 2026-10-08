@@ -16,6 +16,7 @@
   --primary-soft: #dfe6f0;
   --accent: #c4472d;
   --accent-soft: #f7ded6;
+  --accent-ink: #fffaf1;
   --gold: #a8740c;
   --gold-soft: #f6e6bf;
   --green: #2c6e4c;
@@ -54,6 +55,7 @@
     --primary-soft: #2b3b5a;
     --accent: #ff8f73;
     --accent-soft: #4a2c27;
+    --accent-ink: #2a120c;
     --gold: #f2c14e;
     --gold-soft: #41361f;
     --green: #74d3a0;
@@ -87,6 +89,7 @@
   --primary-soft: #2b3b5a;
   --accent: #ff8f73;
   --accent-soft: #4a2c27;
+  --accent-ink: #2a120c;
   --gold: #f2c14e;
   --gold-soft: #41361f;
   --green: #74d3a0;
@@ -313,7 +316,7 @@ textarea {
   border-radius: 999px;
   border: none;
   background: var(--accent);
-  color: #fffaf1;
+  color: var(--accent-ink);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -444,6 +447,7 @@ textarea {
   color: var(--ink);
 }
 .mid-num {
+  margin: 0;
   font-size: 1.2rem;
   font-weight: 700;
   overflow-wrap: anywhere;

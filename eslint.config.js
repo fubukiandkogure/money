@@ -7,7 +7,7 @@ const browser = Object.fromEntries(
     'Request', 'Response', 'globalThis', 'Proxy',
   ].map((k) => [k, 'readonly']),
 );
-const node = Object.fromEntries(['process', 'console', 'setTimeout', 'URL', 'globalThis', 'structuredClone'].map((k) => [k, 'readonly']));
+const node = Object.fromEntries(['process', 'console', 'setTimeout', 'URL', 'globalThis', 'structuredClone', 'Buffer', 'IDBObjectStore'].map((k) => [k, 'readonly']));
 
 export default [
   {

@@ -99,9 +99,14 @@ export function openExpenseSheet({ event, preset = {} } = {}) {
         setFieldError(amountField, a.ok ? null : a.error);
         const categoryId = cat.get();
         setFieldError(catField, categoryId ? null : 'カテゴリーを選んでください');
-        if (!a.ok || !categoryId) return;
-        if (a.value <= 0) {
-          setFieldError(amountField, '1円以上で入力してください');
+        if (!a.ok || a.value <= 0) {
+          if (a.ok) setFieldError(amountField, '1円以上で入力してください');
+          amount.input.focus();
+          amount.input.scrollIntoView({ block: 'center' });
+          return;
+        }
+        if (!categoryId) {
+          catField.scrollIntoView({ block: 'center' });
           return;
         }
         const input = {
