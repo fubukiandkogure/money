@@ -45,7 +45,7 @@ export function renderRecords(ymParam) {
     { label: '表示する種類' },
   );
   const catSel = select(
-    CATEGORIES.map((c) => [c.id, `${c.icon} ${c.label}`]),
+    CATEGORIES.map((c) => [c.id, c.label]),
     view.category || null,
     { emptyLabel: 'カテゴリー：すべて', label: 'カテゴリー' },
   );
@@ -67,13 +67,13 @@ export function renderRecords(ymParam) {
     `★ ${LUXURY_LABEL}だけ`,
   );
 
-  const receipt = (title, items, totalYen) =>
+  const dayGroup = (title, items, totalYen) =>
     h(
       'li',
-      { class: 'receipt' },
+      { class: 'day-group' },
       h(
         'div',
-        { class: 'receipt-head' },
+        { class: 'day-head' },
         h('span', { class: 'date' }, title),
         totalYen ? h('span', { class: 'num' }, formatYen(totalYen)) : h('span', { class: 'small muted' }, '支出なし'),
       ),
@@ -135,17 +135,17 @@ export function renderRecords(ymParam) {
       ? card(emptyState('この条件の記録はありません', '記録がない月は「記録なし」として扱います（0円や節約とは判定しません）。'))
       : h(
           'ul',
-          { class: 'receipts', 'aria-label': `${formatMonth(ym)}の記録` },
+          { class: 'day-list', 'aria-label': `${formatMonth(ym)}の記録` },
           groups.undated.length
-            ? receipt(`日付不明（${formatMonth(ym)}）`, groups.undated, sumYen(groups.undated.filter(isExpense).map((e) => e.amountYen)))
+            ? dayGroup(`日付不明（${formatMonth(ym)}）`, groups.undated, sumYen(groups.undated.filter(isExpense).map((e) => e.amountYen)))
             : null,
-          groups.days.map((g) => receipt(`${formatDateShort(g.date)}（${WD[weekday(g.date)]}）`, g.items, g.expenseTotal)),
+          groups.days.map((g) => dayGroup(`${formatDateShort(g.date)}（${WD[weekday(g.date)]}）`, g.items, g.expenseTotal)),
         );
 
   return h(
     'div',
     { class: 'page' },
-    pageTitle('記録', { kicker: 'CHOBA', action: helpButton('記録済み支出', HELP.spending) }),
+    pageTitle('記録', { action: helpButton('記録済み支出', HELP.spending) }),
     cols([side], [listing], { ratio: 'wide-right' }),
   );
 }

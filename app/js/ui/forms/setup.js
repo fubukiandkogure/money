@@ -57,7 +57,7 @@ export function openSetupSheet() {
         const principalBox = h(
           'div',
           { class: 'extra', hidden: type !== 'loan' },
-          field('当初の元金（分かれば）', principal.el, { id: principal.id, hint: '分かると、奨学金の坂道で進み具合が見られます。' }),
+          field('当初の元金（分かれば）', principal.el, { id: principal.id, hint: '分かると、奨学金の進み具合をメーターで見られます。' }),
         );
         const row = h(
           'div',
@@ -115,7 +115,7 @@ export function openSetupSheet() {
         list,
         h('button', { type: 'button', class: 'link-btn', onclick: () => addRow({ type: 'bank', name: '' }) }, '＋ 口座をもう1つ'),
         field('どこから管理を始める？', startSel.el, {
-          hint: '先月末から始めると、すぐに先月末の残高をまとめて記録して「月末の判子」を押せます。金融機関の履歴で先月末の残高を確認してください。',
+          hint: '先月末から始めると、すぐに先月末の残高をまとめて記録して月末を確定できます。金融機関の履歴で先月末の残高を確認してください。',
         }),
         moves.el,
         err.el,
@@ -185,7 +185,7 @@ export function openMonthEndBulkSheet(ym) {
           ),
         };
       });
-      const confirmChk = checkbox(`記録したら、そのまま${formatMonth(ym)}末を確定する（朱の判子）`, true, { hint: '空欄の口座があるときは確定しません。' });
+      const confirmChk = checkbox(`記録したら、そのまま${formatMonth(ym)}末を確定する`, true, { hint: '空欄の口座があるときは確定しません。' });
       const err = formError();
       const save = saveButton(`${formatDateShort(end)} の終了時点の残高として記録`, async () => {
         err.clear();

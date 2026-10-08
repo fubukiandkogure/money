@@ -219,9 +219,14 @@ export function toast(message, { kind = 'ok', action, duration } = {}) {
   return dismiss;
 }
 
-/** 月末を確定したときの朱の判子（動きを減らす設定ではアニメーションしない） */
+/** 月末を確定したとき：金色のブロックが1つ降ってきて積もる */
 export function playStamp(text = '確定') {
-  const el = h('div', { class: 'stamp-anim play', 'aria-hidden': 'true' }, h('span', null, text));
+  const el = h(
+    'div',
+    { class: 'stamp-anim play', 'aria-hidden': 'true' },
+    h('span', { class: 'stamp-block' }, icon('check', 34)),
+    h('span', { class: 'stamp-text' }, text),
+  );
   document.body.append(el);
   setTimeout(() => el.remove(), 1300);
 }

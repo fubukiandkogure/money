@@ -1,7 +1,7 @@
 // 手動バックアップ（JSON）の書き出し・検証・移行。
 // 復元は「置換」。検証に通らないファイルでは既存データに一切触れない。
 
-import { APP_ID, APP_VERSION, CATEGORIES, COLLECTIONS, SCHEMA_VERSION } from './constants.js';
+import { APP_ID, APP_NAME, APP_VERSION, CATEGORIES, COLLECTIONS, FILE_PREFIX, SCHEMA_VERSION } from './constants.js';
 import { validateDataset } from './validate.js';
 import { currentOverview } from './assets.js';
 import { effectiveClose } from './closes.js';
@@ -55,17 +55,17 @@ export function buildExport(state, now) {
     appVersion: APP_VERSION,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: now,
-    note: 'ふところ町のバックアップです。本人の金融データを含みます。共有しないでください。',
+    note: `${APP_NAME}のバックアップです。本人の金融データを含みます。共有しないでください。`,
     data: { ...data, categories: CATEGORIES },
     summary: summarize(data, stampToDateJST(now)),
   };
 }
 
 export function backupFileName(now) {
-  // 2026-10-08T21:05:33.000+09:00 → futokoro-machi-backup-20261008-2105.json
+  // 2026-10-08T21:05:33.000+09:00 → chiritsumo-backup-20261008-2105.json
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(now);
   const stamp = m ? `${m[1]}${m[2]}${m[3]}-${m[4]}${m[5]}` : 'export';
-  return `${APP_ID}-backup-${stamp}.json`;
+  return `${FILE_PREFIX}-backup-${stamp}.json`;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ export function parseBackup(text) {
   }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, code: 'format', errors: ['バックアップの形式ではありません'] };
   if (obj.appId !== APP_ID) {
-    return { ok: false, code: 'other_app', errors: ['ふところ町のバックアップではありません（別のアプリのファイルの可能性があります）'] };
+    return { ok: false, code: 'other_app', errors: [`${APP_NAME}のバックアップではありません（別のアプリのファイルの可能性があります）`] };
   }
   if (!Number.isInteger(obj.schemaVersion) || obj.schemaVersion < 1) return { ok: false, code: 'format', errors: ['データの版が読み取れません'] };
   if (obj.schemaVersion > SCHEMA_VERSION) {

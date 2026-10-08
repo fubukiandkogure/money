@@ -1,7 +1,7 @@
-// 資産：口座（通帳）・残高の確認日・履歴・月末チェック
+// 資産：口座・残高の確認日・履歴・月末チェック
 import { h } from '../ui/dom.js';
 import { app } from '../app.js';
-import { icon, accIcon } from '../ui/icons.js';
+import { icon } from '../ui/icons.js';
 import {
   yen,
   badge,
@@ -17,22 +17,20 @@ import {
   deltaView,
   kv,
   cols,
-  postmark,
+  dateChip,
   accTile,
 } from '../ui/parts.js';
 import { confirmDialog, playStamp } from '../ui/overlay.js';
 import { ACCOUNT_TYPES } from '../core/constants.js';
 import { currentOverview, sortAccounts, latestActual, newerEstimate, monthEndStatus, PROBLEM_LABELS, loanProgress, snapshotIndex } from '../core/assets.js';
 import { effectiveClose, checklistMonths, monthReport, REVIEW_REASON_LABELS, COMPARE_REASON_LABELS } from '../core/closes.js';
-import { formatDateShort, formatDateLong, formatMonth, formatStamp, isLastDayOfMonth, lastDayOfMonth, isValidMonth } from '../core/dates.js';
+import { formatDateShort, formatDateLong, formatMonth, formatStamp, isLastDayOfMonth, lastDayOfMonth, isValidMonth, relativeDays } from '../core/dates.js';
 import { formatYen, formatPercent, formatDelta } from '../core/money.js';
 import * as A from '../core/actions.js';
 import { openAccountSheet, openSnapshotSheet, invalidateSnapshotFlow, verifyAsMonthEnd } from '../ui/forms/assets.js';
 import { openSetupSheet, openMonthEndBulkSheet } from '../ui/forms/setup.js';
 
 const view = { showArchived: false };
-
-const PB_KIND = { bank: '普 通 預 金', investment: 'つ み た て', loan: '奨 学 金' };
 
 export function renderAssets() {
   const state = app.state;
@@ -46,13 +44,12 @@ export function renderAssets() {
       'div',
       { class: 'page' },
       pageTitle('資産', {
-        kicker: 'KURA',
         sub: '確認した残高だけを合計します',
         action: button('口座を追加', () => openAccountSheet(), { cls: 'btn small', iconName: 'plus' }),
       }),
       card(
         emptyState(
-          '蔵はまだ空っぽです',
+          'まだ口座がありません',
           '銀行・投資（NISAなど）・奨学金を登録して、確認した残高を記録しましょう。よくある組み合わせは「はじめの準備」でまとめて登録できます。',
           button('はじめの準備をする', () => openSetupSheet(), { cls: 'btn primary', iconName: 'sparkle' }),
         ),
@@ -66,11 +63,11 @@ export function renderAssets() {
     return h(
       'div',
       { class: 'acc-group' },
-      h('h3', { class: 'group-title' }, accTile(type, 's'), meta.label),
+      h('h3', { class: 'group-title' }, meta.label),
       h(
-        'div',
-        { class: 'passbooks' },
-        list.map((a) => passbook(a, today)),
+        'ul',
+        { class: 'acc-list' },
+        list.map((a) => accRow(a, today)),
       ),
     );
   });
@@ -94,7 +91,6 @@ export function renderAssets() {
     'div',
     { class: 'page' },
     pageTitle('資産', {
-      kicker: 'KURA',
       sub: '確認した残高だけを合計します',
       action: button('口座を追加', () => openAccountSheet(), { cls: 'btn small', iconName: 'plus' }),
     }),
@@ -110,9 +106,9 @@ export function renderAssets() {
                 h('summary', null, `アーカイブした口座（${archived.length}）`),
                 h('p', { class: 'fine' }, 'アーカイブは一覧の整理です。過去の残高・月末確定はそのまま残り、管理期間内なら月末の対象にもなります。'),
                 h(
-                  'div',
-                  { class: 'passbooks' },
-                  archived.map((a) => passbook(a, today)),
+                  'ul',
+                  { class: 'acc-list' },
+                  archived.map((a) => accRow(a, today)),
                 ),
               ),
             )
@@ -122,28 +118,31 @@ export function renderAssets() {
   );
 }
 
-function passbook(a, today) {
+function accRow(a, today) {
   const { snapshot, conflict } = latestActual(app.state.snapshots, a.id, today);
   const est = newerEstimate(app.state.snapshots, a.id, snapshot?.asOfDate);
   const ended = a.managedUntil && a.managedUntil <= today;
   return h(
-    'div',
-    { class: ['passbook-wrap', ended && 'ended'] },
+    'li',
+    { class: ['acc-item', ended && 'ended'] },
     h(
       'a',
-      { class: ['passbook', `acc-${a.type}`], href: `#/assets/account/${encodeURIComponent(a.id)}` },
-      h('span', { class: 'pb-kind' }, PB_KIND[a.type]),
-      h('span', { class: 'pb-emblem', 'aria-hidden': 'true' }, accIcon(a.type, 24)),
-      h('span', { class: 'pb-name' }, a.name),
-      h('span', { class: 'pb-amount' }, snapshot ? formatYen(snapshot.amountYen) : '—'),
+      { class: 'acc-row', href: `#/assets/account/${encodeURIComponent(a.id)}` },
+      accTile(a.type),
       h(
         'span',
-        { class: 'pb-meta' },
-        snapshot ? h('span', null, asOf(snapshot.asOfDate, today)) : badge('未確認', 'warn', 'alert'),
-        conflict ? badge('同じ日に複数', 'warn') : null,
-        est ? badge(`推計 ${formatYen(est.amountYen)}（${formatDateShort(est.asOfDate)}）`, 'est') : null,
-        ended ? badge(a.endKind === 'zero' ? '解約・完済' : '管理終了', 'neutral') : null,
+        { class: 'acc-main' },
+        h('span', { class: 'acc-name' }, a.name),
+        h(
+          'span',
+          { class: 'acc-meta' },
+          snapshot ? h('span', null, asOf(snapshot.asOfDate, today)) : badge('未確認', 'warn', 'alert'),
+          conflict ? badge('同じ日に複数', 'warn') : null,
+          est ? badge(`推計 ${formatYen(est.amountYen)}（${formatDateShort(est.asOfDate)}）`, 'est') : null,
+          ended ? badge(a.endKind === 'zero' ? '解約・完済' : '管理終了', 'neutral') : null,
+        ),
       ),
+      h('span', { class: ['acc-amount', 'num', !snapshot && 'muted'] }, snapshot ? formatYen(snapshot.amountYen) : '—'),
     ),
     ended ? null : button('', () => openSnapshotSheet({ account: a }), { cls: 'icon-btn update', iconName: 'edit', label: `${a.name}の残高を記録` }),
   );
@@ -158,7 +157,7 @@ function monthChecklist(today) {
     );
   }
   return card(
-    cardHead('月末チェック', { action: helpButton('月末の確定', HELP.monthEnd), sub: '月末の終了時点の残高がそろった月に、朱の判子を押します' }),
+    cardHead('月末チェック', { action: helpButton('月末の確定', HELP.monthEnd), sub: '月末の終了時点の残高がそろった月を確定します' }),
     h(
       'ul',
       { class: 'month-list' },
@@ -190,7 +189,7 @@ function monthChecklist(today) {
 }
 
 // ---------------------------------------------------------------------------
-// 口座の詳細（通帳の中身）
+// 口座の詳細
 
 export function renderAccount(id) {
   const state = app.state;
@@ -225,18 +224,22 @@ export function renderAccount(id) {
   const head = card(
     h(
       'div',
-      { class: ['passbook', `acc-${a.type}`], style: { minHeight: '0' } },
-      h('span', { class: 'pb-kind' }, PB_KIND[a.type]),
-      h('span', { class: 'pb-emblem', 'aria-hidden': 'true' }, accIcon(a.type, 24)),
-      h('span', { class: 'pb-name' }, a.name),
-      h('span', { class: 'pb-amount' }, latest ? formatYen(latest.amountYen) : '未確認'),
+      { class: 'acc-hero' },
+      accTile(a.type, 'l'),
+      h(
+        'div',
+        null,
+        h('p', { class: 'mini-label' }, latest ? '確認済みの残高' : '残高'),
+        h('p', { class: ['hero-num', 'small-hero', !latest && 'muted'] }, latest ? h('span', { class: 'num' }, formatYen(latest.amountYen)) : '未確認'),
+      ),
     ),
     latest
       ? h(
-          'div',
-          { class: 'asof-row' },
-          postmark(latest.asOfDate),
-          h('p', null, `${asOf(latest.asOfDate, today)}の確認済み残高`, h('br'), h('span', { class: 'fine' }, `記録 ${formatStamp(latest.recordedAt)}`)),
+          'p',
+          { class: 'asof-line' },
+          dateChip(latest.asOfDate),
+          ` 時点（${relativeDays(latest.asOfDate, today)}）`,
+          h('span', { class: 'fine block' }, `記録 ${formatStamp(latest.recordedAt)}`),
         )
       : null,
     conflict ? h('p', { class: 'note-line warn' }, icon('alert', 16), '同じ日に複数の記録があります。どちらかを訂正か取り消ししてください。') : null,
@@ -270,17 +273,12 @@ export function renderAccount(id) {
   );
 
   const history = card(
-    cardHead('通帳（残高の履歴）', { sub: '訂正・取り消しした記録も残ります。「前回との差」は確認した残高どうしの差で、収入や節約額ではありません。' }),
+    cardHead('残高の履歴', { sub: '訂正・取り消しした記録も残ります。「前回との差」は確認した残高どうしの差で、収入や節約額ではありません。' }),
     all.length
       ? h(
-          'div',
-          { class: 'pb-page' },
-          h('div', { class: 'pb-head', 'aria-hidden': 'true' }, h('span', null, '年 月 日'), h('span', null, '区 分'), h('span', { class: 'right' }, '残 高')),
-          h(
-            'ul',
-            { class: 'snap-list' },
-            all.map((s) => snapRow(s, a, idx, diffs)),
-          ),
+          'ul',
+          { class: 'snap-list' },
+          all.map((s) => snapRow(s, a, idx, diffs)),
         )
       : h('p', { class: 'muted small' }, 'まだ記録がありません。'),
   );
@@ -361,7 +359,7 @@ function snapRow(s, account, idx, diffs) {
   return h(
     'li',
     { class: ['snap', !effective && 'inactive'] },
-    h('span', { class: 'snap-date' }, s.asOfDate.replaceAll('-', '.')),
+    h('span', { class: 'snap-date num' }, s.asOfDate.replaceAll('-', '/')),
     h('span', { class: 'snap-mid' }, badges),
     h(
       'span',
@@ -413,7 +411,7 @@ export function renderMonth(ym) {
     return h(
       'li',
       { class: ['me-item', i.adopted && 'done'] },
-      h('span', { class: 'me-check', 'aria-hidden': 'true' }, i.adopted ? '済' : ''),
+      h('span', { class: 'me-check', 'aria-hidden': 'true' }, i.adopted ? icon('check', 16) : ''),
       h('a', { href: `#/assets/account/${encodeURIComponent(a.id)}` }, a.name),
       right,
       detail,
@@ -428,7 +426,7 @@ export function renderMonth(ym) {
       const ok = await confirmDialog({
         title: `${formatMonth(ym)}末を確定しますか？`,
         message: `総資産 ${formatYen(ms.totals.assets)}、奨学金 ${formatYen(ms.totals.loans)}、管理上の純資産 ${formatYen(ms.totals.net)} で確定します。使った残高記録と対象口座を固定して保存します。`,
-        okLabel: '判子を押す（確定）',
+        okLabel: '確定する',
         details: e.history.length
           ? h('div', null, (reasonInput = h('input', { class: 'text-input', type: 'text', placeholder: '確定し直す理由（任意）', 'aria-label': '理由' })))
           : null,
@@ -439,7 +437,7 @@ export function renderMonth(ym) {
       const saved = await app.save(res, { okMessage: `${formatMonth(ym)}末を確定しました` });
       if (saved.ok) playStamp();
     },
-    { cls: 'btn primary wide big', iconName: 'stamp', disabled: !ms.canConfirm || undefined },
+    { cls: 'btn primary wide big', iconName: 'check', disabled: !ms.canConfirm || undefined },
   );
 
   let blockers = null;
@@ -455,11 +453,11 @@ export function renderMonth(ym) {
     h(
       'div',
       { class: 'me-status' },
-      e.status === 'confirmed'
-        ? h('div', { class: 'hanko', 'aria-hidden': 'true' }, '確定')
-        : e.status === 'needs_review'
-          ? h('div', { class: 'hanko review', 'aria-hidden': 'true' }, '要確認')
-          : null,
+      h(
+        'div',
+        { class: ['seal', `st-${e.status}`], 'aria-hidden': 'true' },
+        e.status === 'confirmed' ? icon('check', 26) : e.status === 'needs_review' ? '!' : '',
+      ),
       h(
         'div',
         null,

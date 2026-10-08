@@ -1,7 +1,7 @@
 // 入力部品。文字入力を強制せず、タップ中心で入力できるようにする。
 
 import { h, nextUid } from './dom.js';
-import { icon, catIcon } from './icons.js';
+import { catIcon, pxIcon } from './icons.js';
 import { CATEGORIES, LUXURY_LABEL } from '../core/constants.js';
 import { parseYenInput, formatPlain } from '../core/money.js';
 import { addDays, formatDateShort, isValidDate, isValidMonth } from '../core/dates.js';
@@ -182,7 +182,7 @@ export function luxuryToggle(on, onChange) {
         onChange?.(state);
       },
     },
-    icon('star', 20),
+    pxIcon('star', 18),
     h('span', null, LUXURY_LABEL),
   );
   return { el: btn, get: () => state };

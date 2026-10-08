@@ -2,7 +2,7 @@
 import { app } from './app.js';
 import { h, replace } from './ui/dom.js';
 import { icon } from './ui/icons.js';
-import { logo } from './ui/art.js';
+import { logo, wordmark } from './ui/art.js';
 import { toast, sheetsOpen, confirmDialog } from './ui/overlay.js';
 import { Store, LoadError, openForRescue } from './data/store.js';
 import { APP_ID, APP_NAME, DB_NAME, DEMO_DB_NAME, SCHEMA_VERSION } from './core/constants.js';
@@ -51,8 +51,8 @@ function shell() {
   tabbar = h(
     'nav',
     { class: 'tabbar', 'aria-label': 'メインメニュー' },
-    // 開いた画面（左のメニュー）でだけ見える町の看板
-    h('a', { class: 'rail-brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム`, tabindex: '-1' }, logo(40), h('span', { class: 'brand-name' }, APP_NAME)),
+    // 開いた画面（左のメニュー）でだけ見えるアイコン
+    h('a', { class: 'rail-brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム`, tabindex: '-1' }, logo(44)),
     TABS.map(([key, href, label, ic]) => h('a', { href, class: 'tab-link', dataset: { tab: key } }, icon(ic, 24), h('span', null, label))),
     h('a', { href: '#/settings', class: 'tab-link rail-settings', dataset: { tab: 'settings' } }, icon('gear', 24), h('span', null, '設定')),
   );
@@ -65,12 +65,7 @@ function shell() {
   const top = h(
     'header',
     { class: 'topbar' },
-    h(
-      'a',
-      { class: 'brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム` },
-      logo(34),
-      h('span', null, h('span', { class: 'brand-name' }, APP_NAME), h('span', { class: 'brand-sub' }, '懐具合を見守る小さな町')),
-    ),
+    h('a', { class: 'brand', href: '#/home', 'aria-label': `${APP_NAME} ホーム` }, wordmark({ scale: 2 })),
     app.demo ? h('span', { class: 'demo-flag' }, 'デモ（架空データ）') : null,
     h('a', { class: 'icon-btn', href: '#/settings', 'aria-label': '設定・データ管理' }, icon('gear')),
   );
@@ -137,7 +132,7 @@ function applyTheme(theme) {
     /* 端末ごとの表示の記憶。保存できなくても問題ない */
   }
   const dark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#161b26' : '#22406b');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#101114' : '#f3f1eb');
 }
 
 /** 読み込みエラーの画面から、検証済みのバックアップで置き換える（壊れたデータを直す手段） */

@@ -387,7 +387,7 @@ export function openPaymentSheet({ row, contract, ym, extra = false }) {
                     },
                   },
                   h('span', { class: 'pick-date' }, e.datePrecision === 'month' ? `${formatMonth(e.yearMonth)}（日付不明）` : formatDateLong(e.occurredOn)),
-                  h('span', { class: 'pick-main' }, `${categoryById(e.categoryId).icon} ${e.memo || categoryById(e.categoryId).label}`),
+                  h('span', { class: 'pick-main' }, e.memo || categoryById(e.categoryId).label),
                   h('span', { class: 'pick-amount num' }, formatYen(e.amountYen)),
                 ),
               ),

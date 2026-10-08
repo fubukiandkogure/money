@@ -5,3 +5,4 @@ test-results/
 # 個人のバックアップを誤ってコミットしないため
 *backup*.json
 futokoro-machi-*.json
+chiritsumo-*.json

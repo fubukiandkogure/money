@@ -66,7 +66,7 @@ test('D03: 書き出し → 検証 → 復元データで ID・履歴・確定�
   assert.equal(parsed.summary.closes['2026-09'].status, 'confirmed');
   assert.equal(parsed.summary.luxuryCount, 1);
   assert.equal(parsed.summary.expenseTotal, 6800 + 3200 + 500 + 980);
-  assert.equal(backupFileName(now), 'futokoro-machi-backup-20261020-2105.json');
+  assert.equal(backupFileName(now), 'chiritsumo-backup-20261020-2105.json');
 });
 
 test('D04: 壊れたJSON・別アプリ・未対応の新しい版は拒否', () => {

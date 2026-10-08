@@ -3,7 +3,6 @@ import { h } from '../ui/dom.js';
 import { app } from '../app.js';
 import { icon } from '../ui/icons.js';
 import { card, cardOf, cardHead, pageTitle, helpButton, HELP, closeBadge, deltaView, emptyState, cols, catTile } from '../ui/parts.js';
-import { catIcon } from '../ui/icons.js';
 import { segmented } from '../ui/fields.js';
 import { columnChart, barList } from '../ui/charts.js';
 import { eventRow } from './home.js';
@@ -24,7 +23,7 @@ export function renderReport(tab = 'assets') {
     h('a', { href: '#/report/assets', class: 'tab', 'aria-current': tab === 'assets' ? 'page' : undefined }, '資産の月次'),
     h('a', { href: '#/report/spending', class: 'tab', 'aria-current': tab === 'spending' ? 'page' : undefined }, '支出の振り返り'),
   );
-  return h('div', { class: 'page' }, pageTitle('振り返り', { kicker: 'FURIKAERI' }), tabs, tab === 'spending' ? spending() : assets());
+  return h('div', { class: 'page' }, pageTitle('振り返り'), tabs, tab === 'spending' ? spending() : assets());
 }
 
 function assets() {
@@ -79,7 +78,7 @@ function assets() {
   return cols(
     [
       cardOf(
-        'grid',
+        'chart',
         cardHead('月末の管理上の純資産', {
           action: helpButton('月末の確定', HELP.monthEnd),
           sub: '確定した月だけを描きます。未確定の月は空けたまま（0円や前の月の値で埋めません）。',
@@ -217,24 +216,6 @@ function spending() {
     })),
   });
 
-  const stickers = sum.luxury.items.map((e) => {
-    const c = e.categoryId;
-    const r = ((hash(e.id) % 13) - 6) * 1.2;
-    return h(
-      'button',
-      {
-        type: 'button',
-        class: 'sticker',
-        style: { '--r': `${r}deg` },
-        onclick: () => openEditor(e),
-        'aria-label': `${LUXURY_LABEL} ${formatYen(e.amountYen)} ${e.memo || ''}`,
-      },
-      h('span', { class: ['sticker-face', `cat-${c}`] }, catIcon(c, 30), h('span', { class: 'star', 'aria-hidden': 'true' }, icon('star', 20))),
-      h('span', { class: 'sticker-amount num' }, formatYen(e.amountYen)),
-      h('span', { class: 'sticker-meta' }, `${e.datePrecision === 'month' ? '日付不明' : formatDateShort(e.occurredOn)} ${e.memo || ''}`),
-    );
-  });
-
   return cols(
     [
       card(
@@ -263,17 +244,21 @@ function spending() {
           : null,
       ),
       sum.hasRecords ? card(cardHead('カテゴリー別', { sub: '割合の分母は、同じ期間の記録済み支出だけです' }), barList(cats, { total: sum.total })) : null,
-      cardOf('grid', cardHead('月ごとの推移', { sub: '記録のない月は「—」（0円ではありません）' }), trendChart),
+      cardOf('chart', cardHead('月ごとの推移', { sub: '記録のない月は「—」（0円ではありません）' }), trendChart),
     ],
     [
       card(
-        cardHead(`★ ${LUXURY_LABEL}のシール帳`, { sub: '自分で印を付けた「ちょっと贅沢」。金額が大きいだけでは自動で付きません。' }),
+        cardHead(LUXURY_LABEL, { sub: '自分で印を付けた「ちょっと贅沢」。金額が大きいだけでは自動で付きません。' }),
         sum.luxury.count
           ? [
-              h('p', { class: 'summary-line' }, `${sum.luxury.count}枚 `, h('strong', { class: 'num' }, formatYen(sum.luxury.total))),
-              h('div', { class: 'sticker-book' }, stickers),
+              h('p', { class: 'summary-line' }, `${sum.luxury.count}件 `, h('strong', { class: 'num' }, formatYen(sum.luxury.total))),
+              h(
+                'ul',
+                { class: 'event-list' },
+                sum.luxury.items.map((e) => eventRow(e, { onClick: () => openEditor(e) })),
+              ),
             ]
-          : h('p', { class: 'small muted' }, `この期間の${LUXURY_LABEL}はまだありません。支出を記録するときに ★ をタップすると、ここにシールが貼られます。`),
+          : h('p', { class: 'small muted' }, `この期間の${LUXURY_LABEL}はまだありません。支出を記録するときに ★ を付けると、ここに並びます。`),
       ),
       sum.big.length
         ? card(
@@ -283,7 +268,7 @@ function spending() {
               { class: 'rank-list' },
               sum.big.map((e, i) => {
                 const row = eventRow(e, { onClick: () => openEditor(e) });
-                row.prepend(h('span', { class: 'rank-badge', 'aria-hidden': 'true' }, ['一', '二', '三', '四', '五'][i]));
+                row.prepend(h('span', { class: 'rank-badge num', 'aria-hidden': 'true' }, String(i + 1)));
                 return row;
               }),
             ),
@@ -291,10 +276,4 @@ function spending() {
         : null,
     ],
   );
-}
-
-function hash(str) {
-  let x = 0;
-  for (let i = 0; i < str.length; i++) x = (x * 31 + str.charCodeAt(i)) | 0;
-  return Math.abs(x);
 }

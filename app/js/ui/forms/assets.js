@@ -17,7 +17,7 @@ export function openAccountSheet({ account } = {}) {
     build: (sheet) => {
       let type = account?.type ?? 'bank';
       const typeSel = segmented(
-        Object.entries(ACCOUNT_TYPES).map(([k, v]) => [k, `${v.icon} ${v.label}`]),
+        Object.entries(ACCOUNT_TYPES).map(([k, v]) => [k, v.label]),
         type,
         (t) => {
           type = t;

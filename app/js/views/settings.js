@@ -372,7 +372,7 @@ export function renderSettings() {
   return h(
     'div',
     { class: 'page' },
-    pageTitle('設定・データ', { kicker: 'KANRININSHITSU' }),
+    pageTitle('設定・データ'),
     cols([exportCard, restoreCard, movesCard], [storageCard, card(cardHead('表示'), theme.el), helpCard, demoCard, dangerCard, aboutCard()]),
   );
 }

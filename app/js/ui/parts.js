@@ -25,7 +25,7 @@ export function card(...children) {
   return h('section', { class: 'card' }, ...children);
 }
 
-/** 種類つきのカード（紙の質感を変える：'ledger' 罫線, 'grid' 方眼, 'passbook' 通帳） */
+/** 種類つきのカード（'chart' グラフ用など） */
 export function cardOf(kind, ...children) {
   return h('section', { class: ['card', `card-${kind}`] }, ...children);
 }
@@ -35,37 +35,42 @@ export function cols(left, right, { ratio } = {}) {
   return h('div', { class: ['cols', ratio && `cols-${ratio}`] }, h('div', { class: 'col' }, left), h('div', { class: 'col' }, right));
 }
 
-/** 消印ふうの日付（確認日など） */
-export function postmark(date, { top = '確認', title } = {}) {
-  if (!date) return h('span', { class: 'postmark empty', title }, h('span', { class: 'pm-top' }, top), h('span', { class: 'pm-mid' }, '—'));
-  const [y, m, d] = date.split('-').map(Number);
-  return h(
-    'span',
-    { class: 'postmark', title: title ?? `${y}年${m}月${d}日`, 'aria-label': `${top} ${y}年${m}月${d}日` },
-    h('span', { class: 'pm-top', 'aria-hidden': 'true' }, top),
-    h('span', { class: 'pm-mid num', 'aria-hidden': 'true' }, `${m}.${d}`),
-    h('span', { class: 'pm-bot num', 'aria-hidden': 'true' }, String(y)),
-  );
+/** 確認日の小さな札（「9/30 時点」など） */
+export function dateChip(date, { prefix = '', title } = {}) {
+  if (!date) return h('span', { class: 'date-chip empty' }, '未確認');
+  return h('span', { class: 'date-chip num', title: title ?? formatDateLong(date) }, prefix, formatDateShort(date));
 }
 
-/** 判子の欄：月ごとの確定状態（確＝確定、要＝要再確認、空欄＝未確定） */
-export function hankoRow(items) {
+/**
+ * 月末のブロック：確定した月は金色に埋まる（チリツモ山の地層と同じ色）。
+ * 色だけに頼らず、✓・！と文字（aria-label）でも示す。
+ */
+export function monthBlocks(items) {
   return h(
     'ol',
-    { class: 'hanko-row' },
-    items.map((it) => {
-      const mark = it.status === 'confirmed' ? '確' : it.status === 'needs_review' ? '要' : '';
-      return h(
+    { class: 'blocks' },
+    items.map((it) =>
+      h(
         'li',
         null,
         h(
           'a',
-          { class: ['hanko-slot', `st-${it.status}`], href: it.href, 'aria-label': `${it.label}末 ${CLOSE_STATUS[it.status]}` },
-          h('span', { class: 'hanko-mark', 'aria-hidden': 'true' }, mark),
-          h('span', { class: 'hanko-label', 'aria-hidden': 'true' }, it.short),
+          { class: ['block', `st-${it.status}`], href: it.href, 'aria-label': `${it.label}末 ${CLOSE_STATUS[it.status]}` },
+          h('span', { class: 'block-face', 'aria-hidden': 'true' }, it.status === 'confirmed' ? icon('check', 16) : it.status === 'needs_review' ? '!' : ''),
+          h('span', { class: 'block-label', 'aria-hidden': 'true' }, it.short),
         ),
-      );
-    }),
+      ),
+    ),
+  );
+}
+
+/** 残りを示すドットのメーター（奨学金など）。ratio は 0〜1（進んだ割合） */
+export function dotMeter(ratio, { cells = 20, label } = {}) {
+  const done = Math.round(Math.min(1, Math.max(0, ratio)) * cells);
+  return h(
+    'div',
+    { class: 'meter', role: 'progressbar', 'aria-valuenow': Math.round(ratio * 100), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': label },
+    Array.from({ length: cells }, (_, i) => h('span', { class: i < done ? 'on' : null })),
   );
 }
 
@@ -74,14 +79,14 @@ export function catTile(categoryId, size = 'm') {
   const c = categoryById(categoryId);
   return h(
     'span',
-    { class: ['cat-tile', `cat-${categoryId}`, `tile-${size}`], 'aria-hidden': 'true' },
-    catIcon(c?.id ?? 'other', size === 's' ? 18 : size === 'l' ? 28 : 22),
+    { class: ['cat-tile', `cat-${c?.id ?? 'other'}`, `tile-${size}`], 'aria-hidden': 'true' },
+    catIcon(c?.id ?? 'other', size === 's' ? 18 : size === 'l' ? 30 : 24),
   );
 }
 
 /** 口座の種類の絵のタイル */
 export function accTile(type, size = 'm') {
-  return h('span', { class: ['acc-tile', `acc-${type}`, `tile-${size}`], 'aria-hidden': 'true' }, accIcon(type, size === 's' ? 18 : 22));
+  return h('span', { class: ['acc-tile', `acc-${type}`, `tile-${size}`], 'aria-hidden': 'true' }, accIcon(type, size === 's' ? 18 : size === 'l' ? 30 : 24));
 }
 
 export function cardHead(title, { action, sub, level = 'h2' } = {}) {

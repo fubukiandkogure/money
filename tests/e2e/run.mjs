@@ -148,7 +148,7 @@ async function seedBasic(page) {
   await waitClosed(page);
   await go(page, '#/assets/month/2026-09');
   await page.getByRole('button', { name: '2026年9月末を確定する' }).click();
-  await dialog(page).getByRole('button', { name: '判子を押す（確定）' }).click();
+  await dialog(page).getByRole('button', { name: '確定する', exact: true }).click();
   await waitClosed(page);
   await go(page, '#/home');
   await addExpense(page, { amount: 6800, category: '食費' });
@@ -263,7 +263,7 @@ await test('A08 月末確定に使った残高を訂正 → 要再確認、確�
   assert.match(await page.locator('main').textContent(), /確定に使った残高が訂正・取り消しされた/);
   await page.screenshot({ path: `${OUT}/A08-needs-review.png`, fullPage: true });
   await page.getByRole('button', { name: 'いまの残高で確定し直す' }).click();
-  await dialog(page).getByRole('button', { name: '判子を押す（確定）' }).click();
+  await dialog(page).getByRole('button', { name: '確定する', exact: true }).click();
   await waitClosed(page);
   assert.match(await page.locator('.status-line').textContent(), /確定.*第2版/);
   const db = await dumpDb(page);
@@ -367,7 +367,7 @@ await test('D03/D07 書き出し → 別の空の環境へ復元 → ID・履歴
   await a.waitForTimeout(200);
   const [download] = await Promise.all([a.waitForEvent('download'), a.getByRole('button', { name: 'JSONを書き出す（ダウンロード）' }).click()]);
   const fileName = download.suggestedFilename();
-  assert.match(fileName, /^futokoro-machi-backup-20261008-1200\.json$/);
+  assert.match(fileName, /^chiritsumo-backup-20261008-1200\.json$/);
   const text = await readFile(await download.path(), 'utf8');
   await writeFile(`${OUT}/sample-backup-fictional.json`, text);
   const backup = JSON.parse(text);
@@ -419,7 +419,7 @@ await test('D04 壊れたJSON・別アプリ・新しすぎる版は拒否し、
   await go(page, '#/settings');
   const cases = [
     ['broken.json', '{"appId":"futokoro-machi","schemaVersion":1,"data":{"accounts":[', /JSONとして読み込めません/],
-    ['subseat.json', JSON.stringify({ version: '0.7.1', subs: [{ name: 'x' }] }), /ふところ町のバックアップではありません/],
+    ['subseat.json', JSON.stringify({ version: '0.7.1', subs: [{ name: 'x' }] }), /チリツモのバックアップではありません/],
     ['future.json', JSON.stringify({ appId: 'futokoro-machi', schemaVersion: 99, exportedAt: '2030-01-01T00:00:00.000+09:00', data: {} }), /新しい版/],
     [
       'invalid.json',
@@ -576,7 +576,7 @@ await test('D08 別のブラウザ（別の保存領域）には自動同期さ�
   await seedBasic(a);
   const b = await newPage(await mk());
   await open(b);
-  assert.match(await b.locator('main').textContent(), /ようこそ、ふところ町へ/);
+  assert.match(await b.locator('main').textContent(), /チリツモへようこそ/);
   await go(b, '#/settings');
   assert.match(await b.locator('main').textContent(), /別のスマホや別のブラウザでは別のデータです（自動同期はありません）/);
 });
@@ -616,10 +616,11 @@ await test('D10 同じドメインの旧サブスク荘の保存キーと別ア�
     const c = await caches.open('subseat-v0.7.1');
     await c.put('/subseat/index.html', new Response('old app'));
     await caches.open('futokoro-machi-shell-0.9.0'); // 自分の古いキャッシュ（消してよい）
+    await caches.open('futokoro-machi-fonts-1'); // 以前の版の書体キャッシュ（自分のもの。消してよい）
   });
   await open(page);
   await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.waitForFunction(async () => (await caches.keys()).includes('futokoro-machi-shell-1.1.0'), null, { timeout: 10000 });
+  await page.waitForFunction(async () => (await caches.keys()).includes('futokoro-machi-shell-1.2.0'), null, { timeout: 10000 });
   await addExpense(page, { amount: 500, category: '食費' });
   await page.reload();
   await page.waitForSelector('html[data-ready="1"]');
@@ -629,14 +630,12 @@ await test('D10 同じドメインの旧サブスク荘の保存キーと別ア�
     keys: await caches.keys(),
     scope: (await navigator.serviceWorker.getRegistration())?.scope,
     old: await (await (await caches.open('subseat-v0.7.1')).match('/subseat/index.html'))?.text(),
-    fonts: (await (await caches.open('futokoro-machi-fonts-1')).keys()).length,
   }));
   assert.equal(info.ls, JSON.stringify({ subs: [{ name: 'テスト' }], v: '0.7.1' }));
   assert.ok(info.keys.includes('subseat-v0.7.1'), '別アプリのキャッシュが残る');
   assert.equal(info.old, 'old app');
   assert.ok(!info.keys.includes('futokoro-machi-shell-0.9.0'), '自分の古いキャッシュは整理する');
-  assert.ok(info.keys.includes('futokoro-machi-fonts-1'), '書体は版をまたぐ長期キャッシュに入る');
-  assert.ok(info.fonts > 0, `書体の分割ファイルがキャッシュされる (${info.fonts})`);
+  assert.ok(!info.keys.includes('futokoro-machi-fonts-1'), '使わなくなった自分の書体キャッシュも整理する');
   assert.equal(info.scope, `${BASE}`);
   // オフラインでも開ける（データは端末内）
   await ctx.setOffline(true);
@@ -769,7 +768,7 @@ await test('操作の一巡（振替・返済・編集・削除と元に戻す�
   noErrors(page);
 });
 
-await test('はじめの準備 → 先月末の残高をまとめて記録 → そのまま確定（朱の判子）', async (mk) => {
+await test('はじめの準備 → 先月末の残高をまとめて記録 → そのまま確定（金色のブロック）', async (mk) => {
   const ctx = await mk();
   const page = await newPage(ctx);
   await open(page);
@@ -805,12 +804,12 @@ await test('はじめの準備 → 先月末の残高をまとめて記録 → �
   assert.equal(db.closes.length, 1);
   assert.equal(db.closes[0].totals.net, 85000 + 420000 + 310000 - 1460000);
   assert.equal(db.meta.find((m) => m.key === 'settings').value.quickMoves.length, 4);
-  // ホーム：判子・猫・坂道
+  // ホーム：確定のブロック・チリツモ山・返済のメーター
   await go(page, '#/home');
   assert.equal((await page.locator('.hero-num').first().textContent()).trim(), '−¥645,000');
-  assert.equal(await page.locator('.hanko-slot.st-confirmed').count(), 1);
-  assert.match(await page.locator('.hero-caption').textContent(), /確定の灯り 1\/1・猫が昼寝中/);
-  assert.equal(await page.locator('.slope .walker').count(), 1);
+  assert.equal(await page.locator('.block.st-confirmed').count(), 1);
+  assert.match(await page.locator('.hero-caption').textContent(), /確定 1か月/);
+  assert.equal(await page.locator('.meter span.on').count(), 8, '当初240万円・残り146万円 → 20マスのうち8');
   await page.screenshot({ path: `${OUT}/setup-home.png`, fullPage: true });
   noErrors(page);
 });

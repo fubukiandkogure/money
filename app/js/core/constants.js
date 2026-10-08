@@ -1,7 +1,9 @@
 // アプリ固有の識別子。旧サブスク荘（subseat:v1 等）とは別の名前を使う。
 export const APP_ID = 'futokoro-machi';
-export const APP_NAME = 'ふところ町';
-export const APP_VERSION = '1.1.0';
+export const APP_NAME = 'チリツモ';
+// 書き出すファイル名の頭。保存場所（DB）やバックアップの appId は、互換のため最初の名前（futokoro-machi）のまま
+export const FILE_PREFIX = 'chiritsumo';
+export const APP_VERSION = '1.2.0';
 
 /** バックアップJSON・端末内データの構造の版 */
 export const SCHEMA_VERSION = 1;

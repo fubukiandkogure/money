@@ -1,14 +1,14 @@
-// ふところ町の Service Worker。
+// チリツモの Service Worker。
 // - 自分の担当パス（このファイルのあるディレクトリ）と、自分のキャッシュ（futokoro-machi-shell-*）だけを扱う
 // - 同じドメインの別アプリ（例：/subseat/）のキャッシュや保存データには触れない
 // - 入力データは IndexedDB にあり、ここでは扱わない（更新でデータは消えない）
 // - 通信できるときは最新の画面を取り、オフラインのときだけ保存した画面を使う
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const CACHE_PREFIX = 'futokoro-machi-shell-';
 const CACHE = `${CACHE_PREFIX}${VERSION}`;
-// 書体は版をまたいで使い回す（中身が変わったら名前の数字を上げる）
-const FONT_CACHE = 'futokoro-machi-fonts-1';
+// 以前の版で使っていた書体のキャッシュ（いまは端末の書体を使うので片付ける。自分のものだけ）
+const OLD_FONT_PREFIX = 'futokoro-machi-fonts-';
 const SCOPE = new URL('./', self.location).href;
 
 const SHELL = [
@@ -16,7 +16,6 @@ const SHELL = [
   './index.html',
   './manifest.webmanifest',
   './css/app.css',
-  './fonts/fonts.css',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -40,10 +39,12 @@ const SHELL = [
   './js/ui/art.js',
   './js/ui/charts.js',
   './js/ui/dom.js',
+  './js/ui/facade.js',
   './js/ui/fields.js',
   './js/ui/icons.js',
   './js/ui/overlay.js',
   './js/ui/parts.js',
+  './js/ui/pixel.js',
   './js/ui/forms/assets.js',
   './js/ui/forms/event.js',
   './js/ui/forms/expense.js',
@@ -70,7 +71,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || k.startsWith(OLD_FONT_PREFIX)).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -84,20 +87,6 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(SCOPE)) return;
   const url = new URL(req.url);
-  // 書体の分割ファイルは中身が変わらないので、一度読んだものを使う（使う文字の分だけ読み込まれる）
-  if (url.href.startsWith(`${SCOPE}fonts/`) && url.pathname.endsWith('.woff2')) {
-    event.respondWith(
-      (async () => {
-        const cache = await caches.open(FONT_CACHE);
-        const hit = await cache.match(req);
-        if (hit) return hit;
-        const res = await fetch(req);
-        if (res.ok) cache.put(req, res.clone());
-        return res;
-      })(),
-    );
-    return;
-  }
   // 画面（index.html）を開くときはクエリ（?demo=1 など）を無視してキャッシュを探す
   const isNav = req.mode === 'navigate';
   event.respondWith(

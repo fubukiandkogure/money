@@ -3,8 +3,9 @@ import { h } from '../ui/dom.js';
 import { app } from '../app.js';
 import { icon } from '../ui/icons.js';
 import { card, cardHead, pageTitle, button, monthNav, helpButton, HELP, emptyState, badge, kv, cols } from '../ui/parts.js';
+import { facade, curtainOf } from '../ui/facade.js';
 import { confirmDialog } from '../ui/overlay.js';
-import { projection, paymentChecklist, contractView, ROOMS_PER_FLOOR, termsOf, paymentsOfContract, trialDaysLeft } from '../core/subs.js';
+import { projection, paymentChecklist, contractView, termsOf, paymentsOfContract, trialDaysLeft } from '../core/subs.js';
 import { FREQUENCIES, CONTRACT_STATUSES } from '../core/constants.js';
 import { formatYen, monthlyFromAnnual } from '../core/money.js';
 import { formatDateShort, formatDateLong, formatMonth, monthOf, isValidMonth, formatStamp } from '../core/dates.js';
@@ -42,66 +43,52 @@ function priceText(v) {
   return t.frequency === 'yearly' ? `${formatYen(t.priceYen)}/年（月あたり約${formatYen(monthlyFromAnnual(t.priceYen))}）` : `${formatYen(t.priceYen)}/月`;
 }
 
+const STATUS_BADGE = { active: 'ok', trial: 'info', leaving: 'warn', ended: 'neutral', scheduled: 'neutral' };
+
+function priceShort(v) {
+  const t = v.current;
+  if (!t || v.status === 'ended') return '';
+  if (t.priceYen === null) return '料金不明';
+  return `${formatYen(t.priceYen)}/${FREQUENCIES[t.frequency].unit}`;
+}
+
 function building(views, today) {
-  const byRoom = new Map(views.map((v) => [v.contract.roomNo, v]));
-  const maxFloor = Math.max(1, ...views.map((v) => Math.floor(v.contract.roomNo / 100)));
-  const floors = [];
-  for (let f = maxFloor; f >= 1; f--) {
-    const rooms = [];
-    for (let r = 1; r <= ROOMS_PER_FLOOR; r++) {
-      const no = f * 100 + r;
-      const v = byRoom.get(no);
-      if (!v) {
-        rooms.push(
-          h(
-            'div',
-            { class: 'room vacant', 'aria-label': `${no}号室 空室` },
-            h('span', { class: 'room-no' }, no),
-            h('span', { class: 'room-vacant' }, '入居者', h('br'), '募集中'),
-          ),
-        );
-        continue;
-      }
+  const rooms = views.map((v) => {
+    const st = statusOf(v, today);
+    return {
+      no: v.contract.roomNo,
+      href: `#/subs/${encodeURIComponent(v.contract.id)}`,
+      label: `${v.contract.roomNo}号室 ${v.contract.displayName} ${st.label}`,
+      state: st.key,
+    };
+  });
+  return h('div', { class: 'facade' }, facade(rooms));
+}
+
+function roomList(views, today) {
+  const sorted = [...views].sort((a, b) => a.contract.roomNo - b.contract.roomNo);
+  return h(
+    'ul',
+    { class: 'room-list' },
+    sorted.map((v) => {
       const st = statusOf(v, today);
-      rooms.push(
+      return h(
+        'li',
+        null,
         h(
           'a',
-          {
-            class: ['room', `st-${st.key}`],
-            href: `#/subs/${encodeURIComponent(v.contract.id)}`,
-            'aria-label': `${no}号室 ${v.contract.displayName} ${st.label}`,
-          },
-          h('span', { class: 'room-window', 'aria-hidden': 'true' }),
-          h('span', { class: 'room-no' }, no),
-          h('span', { class: 'room-name' }, v.contract.displayName),
-          h('span', { class: 'room-status' }, st.label),
-          st.note ? h('span', { class: 'room-note' }, st.note) : null,
-          h('span', { class: 'room-price num' }, st.key === 'ended' ? '' : priceText(v)),
+          { class: ['room-row', `st-${st.key}`], href: `#/subs/${encodeURIComponent(v.contract.id)}` },
+          h('span', { class: ['room-no', 'num', `cur-${curtainOf(v.contract.roomNo)}`], 'aria-hidden': 'true' }, v.contract.roomNo),
+          h(
+            'span',
+            { class: 'room-main' },
+            h('span', { class: 'room-name' }, v.contract.displayName),
+            h('span', { class: 'room-sub' }, badge(st.label, STATUS_BADGE[st.key]), st.note ? h('span', { class: 'room-note' }, st.note) : null),
+          ),
+          h('span', { class: ['room-price', 'num', v.status === 'trial' && 'muted'] }, v.status === 'trial' ? `のち ${priceShort(v)}` : priceShort(v)),
         ),
       );
-    }
-    floors.push(
-      h(
-        'div',
-        { class: 'apt-floor', role: 'group', 'aria-label': `${f}階` },
-        h('span', { class: 'apt-floor-label', 'aria-hidden': 'true' }, `${f}F`),
-        h('div', { class: 'apt-rooms' }, rooms),
-      ),
-    );
-  }
-  const boxes = Math.min(8, maxFloor * ROOMS_PER_FLOOR);
-  return h(
-    'div',
-    { class: 'apt' },
-    h('div', { class: 'apt-roof', 'aria-hidden': 'true' }),
-    h('div', { class: 'apt-sign' }, h('span', null, 'サブスク荘')),
-    h('div', { class: 'apt-body' }, h('div', { class: 'apt-stairs', 'aria-hidden': 'true' }), floors),
-    h(
-      'div',
-      { class: 'apt-ground', 'aria-hidden': 'true' },
-      Array.from({ length: boxes }, () => h('span', { class: 'mailbox' })),
-      h('span', { class: 'plant' }),
-    ),
+    }),
   );
 }
 
@@ -221,20 +208,21 @@ export function renderSubs(ymParam) {
     'div',
     { class: 'page subs' },
     pageTitle('サブスク荘', {
-      kicker: 'SUBSCRIPTION',
       sub: '1契約＝1部屋。内見＝無料体験、退去＝解約',
       action: button('入居', () => openContractSheet(), { cls: 'btn small', iconName: 'plus' }),
     }),
     proj.views.length === 0 && archived.length === 0
-      ? card(
+      ? h(
+          'section',
+          { class: 'card facade-card' },
           building([], today),
           emptyState(
             'まだ誰も住んでいません',
-            '使っているサブスクを1つずつ登録すると、部屋に灯りがともります。合計額ではなく、サービスごとに登録します。',
+            '使っているサブスクを1つずつ登録すると、窓にカーテンがかかります（夜は明かり）。合計額ではなく、サービスごとに登録します。',
             button('最初の入居者を迎える', () => openContractSheet(), { cls: 'btn primary', iconName: 'plus' }),
           ),
         )
-      : [card(building(proj.views, today)), cols([summary], [checklist])],
+      : [h('section', { class: 'card facade-card' }, building(proj.views, today), roomList(proj.views, today)), cols([summary], [checklist])],
     archived.length
       ? card(
           h(
@@ -298,9 +286,8 @@ export function renderContract(id) {
     h(
       'div',
       { class: ['door', `st-${st.key}`] },
-      h('span', { class: 'door-plate' }, `${c.roomNo}`),
-      h('span', { class: 'door-name' }, c.displayName),
-      h('span', { class: 'door-status' }, st.label),
+      h('span', { class: 'door-plate num' }, `${c.roomNo}`),
+      h('span', { class: 'door-main' }, h('span', { class: 'door-name' }, c.displayName), badge(st.label, STATUS_BADGE[st.key])),
     ),
     h(
       'dl',
